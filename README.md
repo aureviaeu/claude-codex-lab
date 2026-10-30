@@ -7,13 +7,13 @@
 ## 流程
 
 1. 你開 Issue，用日常語言寫想法（表單會自動標上 `proposed`）。
-2. Claude 把想法整理成規格與驗收條件。太大就拆成子 Issue。你確認後標成 `ready`（很小的修改 Claude 可以自己接著做）。
-3. Claude 標成 `in-progress`，在 `claude/issue-<編號>-<簡稱>` 上實作，一個 Issue 開一張 PR。
+2. Claude 把想法整理成規格與驗收條件。太大就拆成子 Issue，並請你加上 `ready`。這一步還不寫程式。
+3. 你加上 `ready` 之後，Claude 標成 `in-progress`，在 `claude/issue-<編號>-<簡稱>` 上實作，一個 Issue 開一張 PR。
 4. CI 跑 `scripts/test.sh`，Codex 只提出嚴重問題（P0／P1）。
-5. 有問題的話，Claude 修正、回覆並解決討論、再請審查。這段會重複到 CI 綠燈且沒有未解決的討論。
+5. 有問題的話，Claude 修正並在該討論回覆 `[claude-fixed]` 或 `[claude-declined]`（Action 會把討論標成已解決），再貼一次 `@codex review`。這段會重複到 CI 綠燈且每則意見都有回覆。
 6. Claude 標上 `acceptance` 然後停下。你照 PR 裡的驗收步驟看過，滿意再合併。
 
-規格不清楚、需要金鑰、會花錢、會刪資料，或牽涉安全決策時，Claude 會標 `needs-human` 並停下來問你。
+規格不清楚、需要金鑰、會花錢、會刪資料、牽涉安全決策、同一種 CI 失敗修了三次，或不同意某個 P0 時，Claude 會標 `needs-human` 並停下來問你。
 
 ```mermaid
 flowchart TD
@@ -40,4 +40,4 @@ flowchart TD
 | `P0` | 審查：嚴重問題（安全、資料遺失、壞掉、祕密進版控） |
 | `P1` | 審查：明確的功能錯誤 |
 
-規則全文在 [AGENTS.md](AGENTS.md)（英文，給 AI）。Claude 的操作步驟在 [CLAUDE.md](CLAUDE.md)。
+規則全文在 [AGENTS.md](AGENTS.md)（英文，給 AI）。Claude 的操作步驟在 [CLAUDE.md](CLAUDE.md)。設定 Claude 排程與 Codex 審查見 [docs/SETUP.md](docs/SETUP.md)。

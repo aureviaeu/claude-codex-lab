@@ -21,12 +21,12 @@ if [[ ! -f "${ROOT}/AGENTS.md" ]]; then
   exit 1
 fi
 
-if ! grep -q '^## Review guidelines$' "${ROOT}/AGENTS.md"; then
-  echo "FAIL: AGENTS.md is missing the heading '## Review guidelines'"
+if ! grep -q '^## Code Review Rules$' "${ROOT}/AGENTS.md"; then
+  echo "FAIL: AGENTS.md is missing the heading '## Code Review Rules'"
   exit 1
 fi
 
-echo "OK: AGENTS.md exists and contains '## Review guidelines'"
+echo "OK: AGENTS.md exists and contains '## Code Review Rules'"
 
 if command -v shellcheck >/dev/null 2>&1; then
   echo "Running shellcheck on scripts/"
