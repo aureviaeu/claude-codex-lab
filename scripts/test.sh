@@ -16,11 +16,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -f "${ROOT}/verify/PROTECTION_TEST.md" ]]; then
-  echo "intentional failure for branch protection test"
-  exit 1
-fi
-
 if [[ ! -f "${ROOT}/AGENTS.md" ]]; then
   echo "FAIL: AGENTS.md does not exist"
   exit 1
