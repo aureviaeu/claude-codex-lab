@@ -1,0 +1,42 @@
+name: Resolve review threads
+
+# pull_request_review_comment runs this workflow file from the event context
+# (the pull request merge ref), not from main. A pull request can therefore
+# change this YAML. Code Review Rules in AGENTS.md make an unrequested edit
+# under .github/ a P0, which is what stops that. The steps below check out
+# main and run scripts/resolve-thread.py from main, so the pull request
+# branch cannot replace the script that runs with the write token.
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  resolve-thread:
+    name: resolve-thread
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.comment.user.login == 'aureviaeu' &&
+      github.event.comment.in_reply_to_id &&
+      startsWith(github.event.comment.body, '[claude-fixed]')
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve the review thread
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          IN_REPLY_TO_ID: ${{ github.event.comment.in_reply_to_id }}
+        run: python3 scripts/resolve-thread.py
