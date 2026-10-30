@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Resolve the review thread that contains Claude's reply.
+"""Resolve the review thread that contains a [claude-fixed] reply.
 
-Used by .github/workflows/resolve-threads.yml. GraphQL runs only through
-`gh api graphql` with GITHUB_TOKEN. The workflow skips unless the new comment
-is a reply by aureviaeu starting with [claude-fixed] or [claude-declined].
-This script repeats those checks so a manual run cannot resolve an unrelated
-thread. Threads are scanned in pages, at most 100. An already-resolved thread
-is a no-op.
+Used by .github/workflows/resolve-threads.yml, which checks out main and runs
+this file from main. GraphQL runs only through `gh api graphql` with
+GITHUB_TOKEN. The workflow skips unless the new comment is a reply by
+aureviaeu starting with [claude-fixed]. [claude-declined] does not resolve;
+the owner leaves that thread open and resolves it manually if they accept
+the reasoning. This script repeats those checks. Threads are scanned in
+pages, at most 100. An already-resolved thread is a no-op.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ THREAD_PAGE = 50
 COMMENT_PAGE = 100
 MAX_EXTRA_COMMENT_PAGES = 20
 
-PREFIXES = ("[claude-fixed]", "[claude-declined]")
+FIXED_PREFIX = "[claude-fixed]"
 
 THREADS_QUERY = f"""
 query($owner: String!, $repo: String!, $number: Int!, $after: String) {{
@@ -69,12 +70,12 @@ GraphQL = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 def should_handle(author: str, body: str, in_reply_to: str) -> bool:
-    """True when this comment is Claude's reply marker from the owner account."""
+    """True when aureviaeu replied with [claude-fixed]. [claude-declined] stays open."""
     if author != "aureviaeu":
         return False
     if in_reply_to.strip() in ("", "0", "null", "None"):
         return False
-    return body.startswith(PREFIXES)
+    return body.startswith(FIXED_PREFIX)
 
 
 def _page_info(connection: dict[str, Any]) -> tuple[bool, str | None]:
@@ -202,7 +203,7 @@ def main() -> int:
     body = os.environ.get("COMMENT_BODY", "")
     in_reply_to = os.environ.get("IN_REPLY_TO_ID", "")
     if not should_handle(author, body, in_reply_to):
-        print("Skip: comment is not an aureviaeu reply starting with [claude-fixed] or [claude-declined].")
+        print("Skip: comment is not an aureviaeu reply starting with [claude-fixed].")
         return 0
 
     owner = os.environ["REPO_OWNER"]
