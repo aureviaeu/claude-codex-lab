@@ -1,0 +1,34 @@
+name: 想法 Idea
+description: 用日常語言寫下想做的事。Claude 會整理成規格。
+title: "[Idea] "
+labels:
+  - proposed
+body:
+  - type: markdown
+    attributes:
+      value: |
+        用白話寫就好，不必寫成規格。Claude 會整理，你再決定要不要做。
+  - type: textarea
+    id: idea
+    attributes:
+      label: 想法
+      description: 你想做什麼？（What do you want? Casual language is fine.）
+      placeholder: 例如：我想要一個把會議筆記整理成待辦的小工具
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 為什麼想要
+      description: 為什麼現在需要這個？（Why do you want this? Optional.）
+      placeholder: 例如：每次開會完都要自己重打一次，很煩
+    validations:
+      required: false
+  - type: textarea
+    id: done
+    attributes:
+      label: 完成時長什麼樣子
+      description: 做完之後你希望看到什麼？（What does done look like? Optional.）
+      placeholder: 例如：貼上一段筆記，就得到一張可以勾選的清單
+    validations:
+      required: false
