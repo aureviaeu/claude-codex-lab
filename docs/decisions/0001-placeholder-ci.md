@@ -1,5 +1,7 @@
 # 0001 Placeholder CI until the project type is chosen
 
+Superseded by [0002](0002-python-local-web-app.md): `scripts/test.sh` now runs the Python tests.
+
 ## Context
 
 The product type is not chosen, so there is no language or test runner yet. `main` still requires a pull request and a passing `test` check before merge.

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="__TOKEN__">
+<title>旅行照片整理</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>旅行照片整理</h1>
+  <p class="note">只在這台電腦上執行，照片不會上傳。原始檔案不會被修改。</p>
+</header>
+<main>
+  <section id="step-input" class="card">
+    <h2>1. 選擇照片</h2>
+    <label>照片資料夾（完整路徑，含子資料夾）
+      <input id="input-dir" type="text" placeholder="/Users/me/Pictures/2024 北海道" autocomplete="off">
+    </label>
+    <label>行程表（可不填，每天依序列出地點）
+      <textarea id="itinerary" rows="5" placeholder="第1天：桃園機場 → 新千歲機場 → 小樽運河&#10;第2天：富良野 → 美瑛"></textarea>
+    </label>
+    <label class="file">或讀取行程表文字檔 <input id="itinerary-file" type="file" accept=".txt,text/plain"></label>
+    <label class="file">LINE 聊天記錄匯出檔（可不填，只當參考）<input id="chat-file" type="file" accept=".txt,text/plain"></label>
+    <button id="scan" type="button">掃描並排序</button>
+    <p id="scan-status" class="status" role="status"></p>
+  </section>
+
+  <section id="step-review" class="card" hidden>
+    <h2>2. 檢查順序</h2>
+    <p id="summary"></p>
+    <details id="dup-box" hidden><summary>重複檔（只保留一份）</summary><ul id="dups"></ul></details>
+    <details id="skip-box" hidden><summary>不支援的檔案（未處理）</summary><ul id="skipped"></ul></details>
+    <details id="chat-box" hidden><summary>LINE 訊息時間參考</summary><table id="chat"></table></details>
+    <div id="groups-box" hidden>
+      <h3>分組對應行程站點</h3>
+      <p class="note">自動對應會在之後的「景點」功能加入。現在可以手動為每組選擇站點；沒有對應的組會排在最後。</p>
+      <div id="groups"></div>
+    </div>
+    <p class="note">拖拉照片，或用「往前／往後」按鈕調整順序。</p>
+    <button id="reset-order" type="button" class="secondary">還原自動順序</button>
+    <ol id="grid"></ol>
+  </section>
+
+  <section id="step-output" class="card" hidden>
+    <h2>3. 輸出</h2>
+    <label>輸出資料夾（新的或空的資料夾；再次套用時可用同一個）
+      <input id="output-dir" type="text" placeholder="/Users/me/Pictures/2024 北海道-排序" autocomplete="off">
+    </label>
+    <button id="apply" type="button">複製到輸出資料夾</button>
+    <p id="apply-status" class="status" role="status"></p>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
