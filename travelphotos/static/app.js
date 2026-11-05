@@ -273,6 +273,109 @@
     $("grid").replaceChildren(...items);
   }
 
+  // --- folder picker (docs/decisions/0006-in-page-folder-picker.md) ---------
+  const picker = { field: null, listing: null };
+
+  function pickerButton(text, onClick) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = text;
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  function showListing(listing) {
+    picker.listing = listing;
+    $("picker-path").textContent = listing.path;
+    $("picker-up").disabled = !listing.parent;
+    const roots = $("picker-roots");
+    roots.hidden = listing.roots.length < 2;
+    roots.replaceChildren(
+      ...listing.roots.map((r) => {
+        const opt = document.createElement("option");
+        opt.value = r;
+        opt.textContent = r;
+        return opt;
+      })
+    );
+    const current = listing.roots.find((r) => listing.path.toUpperCase().startsWith(r.toUpperCase()));
+    if (current) roots.value = current;
+    const items = listing.folders.map((f) => {
+      const item = document.createElement("li");
+      item.appendChild(pickerButton(`📁 ${f.name}`, () => browse(f.path)));
+      return item;
+    });
+    if (!items.length) {
+      const empty = document.createElement("li");
+      empty.className = "empty";
+      empty.textContent = "（沒有子資料夾）";
+      items.push(empty);
+    }
+    $("picker-list").replaceChildren(...items);
+    $("picker-list").scrollTop = 0;
+  }
+
+  async function browse(path) {
+    setStatus($("picker-status"), "讀取中…");
+    try {
+      showListing(await api(`/api/folders?path=${encodeURIComponent(path)}`));
+      setStatus($("picker-status"), "");
+      return true;
+    } catch (err) {
+      setStatus($("picker-status"), err.message, true);
+      return false;
+    }
+  }
+
+  async function openPicker(field, allowCreate) {
+    picker.field = field;
+    picker.listing = null;
+    $("picker-title").textContent = allowCreate ? "選擇輸出資料夾" : "選擇照片資料夾";
+    $("picker-new").hidden = !allowCreate;
+    $("picker-new-name").value = "";
+    $("picker-list").replaceChildren();
+    $("picker-path").textContent = "";
+    $("picker").showModal();
+    const start = field.value.trim();
+    if (start && (await browse(start))) return;
+    // An empty output field starts next to the photo folder, where a new output folder usually goes.
+    const photos = $("input-dir").value.trim();
+    if (allowCreate && photos && (await browse(photos))) {
+      if (picker.listing.parent) await browse(picker.listing.parent);
+      return;
+    }
+    await browse("");
+  }
+
+  $("pick-input").addEventListener("click", () => openPicker($("input-dir"), false));
+  $("pick-output").addEventListener("click", () => openPicker($("output-dir"), true));
+  $("picker-up").addEventListener("click", () => picker.listing && picker.listing.parent && browse(picker.listing.parent));
+  $("picker-home").addEventListener("click", () => browse(""));
+  $("picker-roots").addEventListener("change", (e) => browse(e.target.value));
+  $("picker-cancel").addEventListener("click", () => $("picker").close());
+  $("picker-choose").addEventListener("click", () => {
+    if (!picker.listing) return;
+    picker.field.value = picker.listing.path;
+    $("picker").close();
+  });
+  async function makeFolder() {
+    if (!picker.listing) return;
+    try {
+      showListing(await api("/api/mkdir", { parent: picker.listing.path, name: $("picker-new-name").value }));
+      $("picker-new-name").value = "";
+      setStatus($("picker-status"), "已建立資料夾。按「選擇這個資料夾」使用它。");
+    } catch (err) {
+      setStatus($("picker-status"), err.message, true);
+    }
+  }
+  $("picker-mkdir").addEventListener("click", makeFolder);
+  $("picker-new-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      makeFolder();
+    }
+  });
+
   api("/api/state")
     .then((s) => {
       if (s.default_input) $("input-dir").value = s.default_input;

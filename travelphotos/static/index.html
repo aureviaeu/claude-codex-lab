@@ -15,9 +15,11 @@
 <main>
   <section id="step-input" class="card">
     <h2>1. 選擇照片</h2>
-    <label>照片資料夾（完整路徑，含子資料夾）
+    <label for="input-dir">照片資料夾（含子資料夾；可按「選擇…」點選，或貼上完整路徑）</label>
+    <div class="path-row">
       <input id="input-dir" type="text" placeholder="/Users/me/Pictures/2024 北海道" autocomplete="off">
-    </label>
+      <button id="pick-input" type="button" class="secondary">選擇…</button>
+    </div>
     <label>行程表（可不填，每天依序列出地點）
       <textarea id="itinerary" rows="5" placeholder="第1天：桃園機場 → 新千歲機場 → 小樽運河&#10;第2天：富良野 → 美瑛"></textarea>
     </label>
@@ -45,13 +47,35 @@
 
   <section id="step-output" class="card" hidden>
     <h2>3. 輸出</h2>
-    <label>輸出資料夾（新的或空的資料夾；再次套用時可用同一個）
+    <label for="output-dir">輸出資料夾（新的或空的資料夾；再次套用時可用同一個。可按「選擇…」點選或建立新資料夾）</label>
+    <div class="path-row">
       <input id="output-dir" type="text" placeholder="/Users/me/Pictures/2024 北海道-排序" autocomplete="off">
-    </label>
+      <button id="pick-output" type="button" class="secondary">選擇…</button>
+    </div>
     <button id="apply" type="button">複製到輸出資料夾</button>
     <p id="apply-status" class="status" role="status"></p>
   </section>
 </main>
+
+<dialog id="picker" aria-labelledby="picker-title">
+  <h2 id="picker-title">選擇資料夾</h2>
+  <p id="picker-path" class="picker-path"></p>
+  <div class="picker-nav">
+    <button id="picker-up" type="button" class="secondary">上一層</button>
+    <button id="picker-home" type="button" class="secondary">家目錄</button>
+    <select id="picker-roots" aria-label="磁碟" hidden></select>
+  </div>
+  <ul id="picker-list" class="picker-list"></ul>
+  <div id="picker-new" class="picker-new" hidden>
+    <input id="picker-new-name" type="text" placeholder="新資料夾名稱" autocomplete="off" aria-label="新資料夾名稱">
+    <button id="picker-mkdir" type="button" class="secondary">在這裡建立資料夾</button>
+  </div>
+  <p id="picker-status" class="status" role="status"></p>
+  <div class="picker-actions">
+    <button id="picker-cancel" type="button" class="secondary">取消</button>
+    <button id="picker-choose" type="button">選擇這個資料夾</button>
+  </div>
+</dialog>
 <script src="/app.js"></script>
 </body>
 </html>
