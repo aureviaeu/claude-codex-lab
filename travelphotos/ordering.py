@@ -92,6 +92,24 @@ def build_groups(files: list[MediaFile], threshold: int = SIMILARITY_THRESHOLD) 
         for j in hashed[x + 1:]:
             if _similar(files[i], files[j], threshold):
                 uf.union(i, j)
+    # Groups are emitted contiguously, so two groups whose capture-time spans
+    # overlap would break chronological order between their timed members.
+    # Merge them; inside one group timed members are sorted by time.
+    spans: dict[int, list[datetime]] = {}
+    for i in timed:
+        root = uf.find(i)
+        t = files[i].time
+        if root not in spans:
+            spans[root] = [t, t]
+        else:
+            spans[root][1] = max(spans[root][1], t)
+    current, current_end = None, None
+    for root, (start, end) in sorted(spans.items(), key=lambda kv: (kv[1][0], kv[0])):
+        if current is not None and start <= current_end:
+            uf.union(current, root)
+            current_end = max(current_end, end)
+        else:
+            current, current_end = root, end
     buckets: dict[int, list[MediaFile]] = {}
     for i, f in enumerate(files):
         buckets.setdefault(uf.find(i), []).append(f)

@@ -55,6 +55,18 @@ class OrderingTests(unittest.TestCase):
         self.assertEqual(similar.group, result.placements[0].group)
         self.assertEqual(result.placements[3].confidence, ordering.LOW)
 
+    def test_similar_group_keeps_capture_order_with_photo_between(self):
+        # a and c look alike; b was taken between them. Capture times must win.
+        base = scene(20)
+        save_jpeg(base, os.path.join(self.inp, "a.jpg"), datetime(2024, 5, 1, 10, 0))
+        save_jpeg(scene(21), os.path.join(self.inp, "b.jpg"), datetime(2024, 5, 1, 10, 15))
+        save_jpeg(variant(base, 1), os.path.join(self.inp, "c.jpg"), datetime(2024, 5, 1, 10, 30))
+        save_jpeg(scene(22), os.path.join(self.inp, "d.jpg"), datetime(2024, 5, 1, 15, 0))
+        result = ordering.order(scan(self.inp).files)
+        self.assertEqual(self.ids(result), ["a.jpg", "b.jpg", "c.jpg", "d.jpg"])
+        for p in result.placements:
+            self.assertEqual(p.confidence, ordering.HIGH)
+
     def test_videos_included(self):
         save_jpeg(scene(1), os.path.join(self.inp, "p.jpg"), datetime(2024, 5, 1, 12, 0))
         save_mp4(os.path.join(self.inp, "nodate.mp4"), None)
