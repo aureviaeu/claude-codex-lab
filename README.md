@@ -41,3 +41,15 @@ flowchart TD
 | `P1` | 審查：明確的功能錯誤 |
 
 規則全文在 [AGENTS.md](AGENTS.md)（英文，給 AI）。Claude 的操作步驟在 [CLAUDE.md](CLAUDE.md)。設定 Claude 排程與 Codex 審查見 [docs/SETUP.md](docs/SETUP.md)。
+
+## 旅行照片整理（#5：匯入與排序）
+
+在自己的電腦上用瀏覽器操作，照片不會上傳，原始檔案不會被修改。
+
+1. 安裝 Python 3.10 以上版本，然後在這個資料夾執行一次：`python3 -m pip install -r requirements.txt`
+2. 啟動：`python3 -m travelphotos`（瀏覽器會自動開啟 `http://127.0.0.1:8765/`）
+3. 輸入照片資料夾的完整路徑，可貼上行程表、選擇 LINE 聊天記錄匯出檔，按「掃描並排序」。
+4. 檢查順序：拖拉或用「往前／往後」調整；有行程表時，可以為每組選擇站點。
+5. 輸入新的輸出資料夾，按「複製到輸出資料夾」。檔案會複製成 `0001_原檔名.jpg` 這樣的名稱，並產生 `report.csv`（可用 Excel 開啟）列出順序、排序依據與可信度，以及被略過的重複檔。調整後再按一次，會在同一個輸出資料夾重新命名。
+
+技術選擇見 `docs/decisions/0002` 到 `0004`。
