@@ -34,3 +34,20 @@ button:disabled { opacity: .5; cursor: wait; }
 .group-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .group-row select { font: inherit; padding: 4px; }
 table { border-collapse: collapse; } td, th { border: 1px solid var(--line); padding: 2px 8px; }
+.path-row { display: flex; gap: 8px; align-items: stretch; margin: 4px 0 10px; }
+.path-row input[type=text] { flex: 1; margin-top: 0; min-width: 0; }
+dialog#picker { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+dialog#picker::backdrop { background: rgba(0, 0, 0, .4); }
+dialog#picker h2 { margin: 0 0 8px; font-size: 18px; }
+.picker-path { word-break: break-all; font-weight: 600; margin: 0 0 8px; }
+.picker-nav, .picker-new, .picker-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.picker-nav select { font: inherit; padding: 6px; }
+.picker-new input[type=text] { flex: 1; min-width: 10em; margin-top: 0; }
+.picker-actions { justify-content: flex-end; }
+.picker-list { list-style: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.picker-list li { border-bottom: 1px solid var(--line); }
+.picker-list li:last-child { border-bottom: 0; }
+.picker-list button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent; color: var(--text); padding: 8px 12px; }
+.picker-list button:hover, .picker-list button:focus { background: var(--bg); }
+.picker-list .empty { color: var(--muted); padding: 8px 12px; }

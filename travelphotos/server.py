@@ -11,7 +11,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import itinerary, ordering, output, similarity
+from . import folders, itinerary, ordering, output, similarity
 from .scan import ScanResult, scan
 
 HOST = "127.0.0.1"
@@ -168,6 +168,11 @@ def make_handler(state: AppState, token: str):
             elif path == "/api/state":
                 with state.lock:
                     self._json(HTTPStatus.OK, state.to_json())
+            elif path == "/api/folders":
+                try:
+                    self._json(HTTPStatus.OK, folders.list_folders((req["query"].get("path") or [""])[0]))
+                except folders.FolderError as exc:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             elif path == "/api/thumb":
                 fid = (req["query"].get("id") or [""])[0]
                 with state.lock:
@@ -214,6 +219,8 @@ def make_handler(state: AppState, token: str):
                             raise ValueError("站點對應格式不正確。")
                         state.arrange(assignments, body.get("manual_order"))
                         self._json(HTTPStatus.OK, state.to_json())
+                    elif path == "/api/mkdir":
+                        self._json(HTTPStatus.OK, folders.make_folder(str(body.get("parent") or ""), str(body.get("name") or "")))
                     elif path == "/api/apply":
                         if state.scan is None or state.result is None:
                             raise ValueError("請先掃描資料夾。")
