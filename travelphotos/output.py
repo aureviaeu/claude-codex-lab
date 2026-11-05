@@ -92,51 +92,89 @@ def apply(scan: ScanResult, result: OrderResult, output_dir: str, chat_summary: 
 
     os.makedirs(out, exist_ok=True)
 
-    # Phase 1: move files we wrote before out of the way, so new names cannot clash.
-    staged: dict[str, str] = {}
-    for i, (sha, name) in enumerate(sorted(managed.items())):
-        tmp = f"{_TMP_PREFIX}{i}"
-        os.replace(os.path.join(out, name), os.path.join(out, tmp))
-        staged[sha] = tmp
+    # Every change to the output folder is logged so a failure part-way can be
+    # undone; the folder then matches its manifest again, as before the run.
+    undo: list[tuple[str, str, str | None]] = []
 
-    # Phase 2: put every file at its new name.
+    def move(src: str, dst: str) -> None:
+        os.replace(os.path.join(out, src), os.path.join(out, dst))
+        undo.append(("move", src, dst))
+
+    def create(name: str) -> str:
+        undo.append(("create", name, None))
+        return os.path.join(out, name)
+
+    leftovers: list[str] = []
     copied = renamed = 0
-    new_manifest: dict[str, str] = {}
-    for p in result.placements:
-        sha = p.file.sha256
-        dest = os.path.join(out, targets[sha])
-        if sha in staged:
-            os.replace(os.path.join(out, staged.pop(sha)), dest)
-            renamed += 1
-        else:
-            shutil.copy2(p.file.path, dest)
-            copied += 1
-        new_manifest[sha] = targets[sha]
+    try:
+        # Phase 1: move files we wrote before out of the way, so new names cannot clash.
+        staged: dict[str, str] = {}
+        for i, (sha, name) in enumerate(sorted(managed.items())):
+            tmp = f"{_TMP_PREFIX}{i}"
+            move(name, tmp)
+            staged[sha] = tmp
 
-    # Files from an earlier run that are no longer part of the order stay, renamed.
-    leftovers = []
-    for sha, tmp in staged.items():
-        base = "未使用_" + managed[sha]
-        name, n = base, 1
-        while os.path.exists(os.path.join(out, name)):
-            n += 1
-            name = f"未使用{n}_{managed[sha]}"
-        os.replace(os.path.join(out, tmp), os.path.join(out, name))
-        leftovers.append(name)
+        # Phase 2: put every file at its new name.
+        new_manifest: dict[str, str] = {}
+        for p in result.placements:
+            sha = p.file.sha256
+            if sha in staged:
+                move(staged.pop(sha), targets[sha])
+                renamed += 1
+            else:
+                shutil.copy2(p.file.path, create(targets[sha]))
+                copied += 1
+            new_manifest[sha] = targets[sha]
 
-    _write_reports(out, scan, result, targets, chat_summary or [])
-    with open(os.path.join(out, MANIFEST), "w", encoding="utf-8") as fh:
-        json.dump(
-            {
-                "version": 1,
-                "input_dir": scan.input_dir,
-                "updated": datetime.now().isoformat(timespec="seconds"),
-                "files": new_manifest,
-            },
-            fh,
-            ensure_ascii=False,
-            indent=2,
-        )
+        # Files from an earlier run that are no longer part of the order stay, renamed.
+        for sha, tmp in staged.items():
+            base = "未使用_" + managed[sha]
+            name, n = base, 1
+            while os.path.exists(os.path.join(out, name)):
+                n += 1
+                name = f"未使用{n}_{managed[sha]}"
+            move(tmp, name)
+            leftovers.append(name)
+
+        # Reports and manifest: write new copies first, then swap them in,
+        # keeping the old ones until the very end. The manifest goes last.
+        _write_reports(out, scan, result, chat_summary or [], targets, prefix=_TMP_PREFIX, create=create)
+        with open(create(_TMP_PREFIX + MANIFEST), "w", encoding="utf-8") as fh:
+            json.dump(
+                {
+                    "version": 1,
+                    "input_dir": scan.input_dir,
+                    "updated": datetime.now().isoformat(timespec="seconds"),
+                    "files": new_manifest,
+                },
+                fh,
+                ensure_ascii=False,
+                indent=2,
+            )
+        backups: list[str] = []
+        for final in (REPORT_CSV, REPORT_JSON, MANIFEST):
+            if os.path.exists(os.path.join(out, final)):
+                backup = f"{_TMP_PREFIX}old-{final}"
+                move(final, backup)
+                backups.append(backup)
+            move(_TMP_PREFIX + final, final)
+    except BaseException as exc:
+        failed = _rollback(out, undo)
+        if failed:
+            raise OutputError(
+                "輸出途中發生錯誤，且無法完全還原輸出資料夾（"
+                + "、".join(failed)
+                + "）。請改用新的輸出資料夾。"
+            ) from exc
+        if isinstance(exc, OSError):
+            raise OutputError(f"輸出途中發生錯誤，已還原輸出資料夾，未做任何變更：{exc}") from exc
+        raise
+
+    for backup in backups:
+        try:
+            os.remove(os.path.join(out, backup))
+        except OSError:
+            pass
     return {
         "output_dir": out,
         "written": total,
@@ -188,14 +226,39 @@ def report_rows(scan: ScanResult, result: OrderResult, targets: dict[str, str] |
 REPORT_FIELDS = ["新順序", "新檔名", "原始檔案", "類型", "可信度", "排序依據", "推定時間", "分組", "行程站點", "手動調整"]
 
 
-def _write_reports(out: str, scan: ScanResult, result: OrderResult, targets: dict[str, str], chat_summary: list) -> None:
+def _rollback(out: str, undo: list[tuple[str, str, str | None]]) -> list[str]:
+    """Undo logged changes, newest first. Returns names that could not be restored."""
+    failed: list[str] = []
+    for op, a, b in reversed(undo):
+        try:
+            if op == "move":
+                os.replace(os.path.join(out, b), os.path.join(out, a))
+            elif os.path.exists(os.path.join(out, a)):
+                os.remove(os.path.join(out, a))
+        except OSError:
+            failed.append(a)
+    return failed
+
+
+def _write_reports(
+    out: str,
+    scan: ScanResult,
+    result: OrderResult,
+    chat_summary: list,
+    targets: dict[str, str],
+    prefix: str = "",
+    create=None,
+) -> None:
+    def path(name: str) -> str:
+        return create(prefix + name) if create else os.path.join(out, prefix + name)
+
     rows = report_rows(scan, result, targets)
     # utf-8-sig so Excel shows the Chinese headers correctly.
-    with open(os.path.join(out, REPORT_CSV), "w", encoding="utf-8-sig", newline="") as fh:
+    with open(path(REPORT_CSV), "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=REPORT_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
-    with open(os.path.join(out, REPORT_JSON), "w", encoding="utf-8") as fh:
+    with open(path(REPORT_JSON), "w", encoding="utf-8") as fh:
         json.dump(
             {
                 "input_dir": scan.input_dir,

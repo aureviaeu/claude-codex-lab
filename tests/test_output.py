@@ -118,6 +118,40 @@ class OutputTests(unittest.TestCase):
             output.apply(result, ordering.order(result.files), self.out)
         self.assertEqual(os.listdir(self.out), ["mine.txt"])
 
+    def test_failed_reapply_restores_output_folder(self):
+        first, _ = self.run_pipeline()
+        before_out = snapshot(self.out)
+        auto = [p.file.id for p in ordering.order(first.files).placements]
+
+        # A new file is scanned, then disappears before it can be copied.
+        new_path = save_jpeg(scene(9), os.path.join(self.inp, "late.jpg"), datetime(2024, 5, 2, 8, 0))
+        second = scan(self.inp)
+        os.remove(new_path)
+        reordered = ordering.order(second.files, manual_order=list(reversed(auto)))
+        with self.assertRaises(output.OutputError):
+            output.apply(second, reordered, self.out)
+
+        # Nothing changed: same names, same contents, same manifest and reports.
+        self.assertEqual(snapshot(self.out), before_out)
+
+        # Retrying after the source is back gives the requested order by content.
+        save_jpeg(scene(9), new_path, datetime(2024, 5, 2, 8, 0))
+        third = scan(self.inp)
+        res = ordering.order(third.files, manual_order=list(reversed(auto)))
+        output.apply(third, res, self.out)
+        for p in res.placements:
+            with open(os.path.join(self.out, output.output_name(p.position, len(res.placements), p.file.name)), "rb") as fh, open(p.file.path, "rb") as src:
+                self.assertEqual(fh.read(), src.read())
+
+    def test_failed_report_write_restores_output_folder(self):
+        result, _ = self.run_pipeline()
+        before_out = snapshot(self.out)
+        res = ordering.order(result.files, manual_order=["b.jpg", "a.jpg"])
+        with mock.patch.object(output.csv, "DictWriter", side_effect=OSError("disk full")):
+            with self.assertRaises(output.OutputError):
+                output.apply(result, res, self.out)
+        self.assertEqual(snapshot(self.out), before_out)
+
     def test_works_without_network(self):
         real_connect = socket.socket.connect
 
