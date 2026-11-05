@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import webbrowser
 
 from .server import create_server
@@ -15,7 +16,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-browser", action="store_true", help="不要自動開啟瀏覽器")
     args = parser.parse_args(argv)
 
-    server, url, _state = create_server(args.port, args.input)
+    try:
+        server, url, _state = create_server(args.port, args.input)
+    except OSError as exc:
+        in_use = exc.errno == errno.EADDRINUSE or getattr(exc, "winerror", None) == 10048
+        if not in_use or args.port == 0:
+            raise
+        print(f"連接埠 {args.port} 已被使用（可能已經開著另一個視窗），改用其他連接埠。")
+        server, url, _state = create_server(0, args.input)
     print(f"旅行照片整理已啟動：{url}")
     print("只在這台電腦上提供服務，照片不會上傳。按 Ctrl+C 結束。")
     if not args.no_browser:
