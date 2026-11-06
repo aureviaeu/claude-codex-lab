@@ -5,6 +5,8 @@
     --high: #4ade80; --medium: #fbbf24; --low: #f87171; }
 }
 * { box-sizing: border-box; }
+/* Author rules such as `display: flex` would otherwise override the hidden attribute (#12). */
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
 header, main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 h1 { margin: 20px 0 4px; font-size: 24px; }
