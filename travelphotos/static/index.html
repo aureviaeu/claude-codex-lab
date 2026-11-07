@@ -45,8 +45,42 @@
     <ol id="grid"></ol>
   </section>
 
+  <section id="step-faces" class="card" hidden>
+    <h2>3. 只留下我和家人（可不使用）</h2>
+    <p class="note">人臉偵測與辨識只在這台電腦上執行，人臉與照片不會上傳。原始檔案不會被修改。</p>
+    <p id="faces-unavailable" class="status error" hidden></p>
+    <div id="faces-body">
+      <h3>保存的人物</h3>
+      <p class="note">勾選要保留的人。照片或影片中只要有其中任一人就保留（團體照也保留）；看不清楚、不確定的也先保留並標示「不確定」。</p>
+      <ul id="people" class="people"></ul>
+      <details id="ref-box">
+        <summary>用參考照片新增一個人</summary>
+        <p class="note">把這個人的幾張清楚照片放在一個資料夾裡（每張取最大的那張臉）。</p>
+        <label>名字<input id="ref-name" type="text" placeholder="例如：媽媽" autocomplete="off"></label>
+        <label for="ref-dir">參考照片資料夾</label>
+        <div class="path-row">
+          <input id="ref-dir" type="text" autocomplete="off">
+          <button id="pick-ref" type="button" class="secondary">選擇…</button>
+        </div>
+        <button id="ref-add" type="button" class="secondary">加入這個人</button>
+      </details>
+      <h3>偵測這次旅行的人臉</h3>
+      <label class="inline">影片每隔幾秒抽一張畫面 <input id="face-interval" type="number" min="0.2" max="600" step="0.5" value="2"></label>
+      <button id="face-analyze" type="button">偵測人臉</button>
+      <div id="clusters-box" hidden>
+        <p class="note">自動分好的人臉組。為要保留的人輸入名字並按「存成這個人」，或加到已保存的人；下次旅行可直接使用。</p>
+        <div id="clusters" class="clusters"></div>
+      </div>
+      <label class="check"><input id="face-enabled" type="checkbox"> 輸出時只保留勾選人物出現的照片和影片</label>
+      <p id="face-summary"></p>
+      <p id="faces-status" class="status" role="status"></p>
+      <p class="note">人臉資料存在：<span id="faces-path"></span></p>
+      <button id="faces-delete" type="button" class="secondary danger">刪除本機人臉資料</button>
+    </div>
+  </section>
+
   <section id="step-output" class="card" hidden>
-    <h2>3. 輸出</h2>
+    <h2>4. 輸出</h2>
     <label for="output-dir">輸出資料夾（新的或空的資料夾；再次套用時可用同一個。可按「選擇…」點選或建立新資料夾）</label>
     <div class="path-row">
       <input id="output-dir" type="text" placeholder="/Users/me/Pictures/2024 北海道-排序" autocomplete="off">

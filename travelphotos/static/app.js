@@ -81,7 +81,9 @@
     try {
       const data = await api("/api/apply", { output_dir: $("output-dir").value });
       const a = data.applied;
-      let msg = `完成：輸出 ${a.written} 個檔案（新複製 ${a.copied}，重新命名 ${a.renamed}），略過重複 ${a.duplicates_skipped} 個。報告：${a.report}`;
+      let msg = `完成：輸出 ${a.written} 個檔案（新複製 ${a.copied}，重新命名 ${a.renamed}），略過重複 ${a.duplicates_skipped} 個。`;
+      if (a.face_excluded) msg += `人物篩選排除 ${a.face_excluded} 個（列在報告中）。`;
+      msg += `報告：${a.report}`;
       if (a.leftovers.length) msg += `。上次輸出但這次不在清單中的檔案已改名為「未使用_…」：${a.leftovers.length} 個`;
       setStatus($("apply-status"), msg);
       state = data;
@@ -133,6 +135,7 @@
 
     renderGroups();
     renderGrid();
+    renderFaces();
   }
 
   function renderGroups() {
@@ -193,7 +196,8 @@
   function renderGrid() {
     const items = state.files.map((f, i) => {
       const el = document.createElement("li");
-      el.className = "item" + (f.manual ? " manual" : "");
+      const faceOut = state.faces.enabled && f.face && !f.face.keep;
+      el.className = "item" + (f.manual ? " manual" : "") + (faceOut ? " face-out" : "");
       el.draggable = true;
       el.dataset.id = f.id;
 
@@ -244,7 +248,14 @@
       down.disabled = i === state.files.length - 1;
       down.addEventListener("click", () => moveTo(f.id, i + 1));
 
-      el.append(thumb, top, name, basis, up, down);
+      el.append(thumb, top, name, basis);
+      if (f.face) {
+        const fb = document.createElement("div");
+        fb.className = `face-badge ${f.face.status}`;
+        fb.textContent = `${f.face.label}：${f.face.reason}`;
+        el.append(fb);
+      }
+      el.append(up, down);
 
       el.addEventListener("dragstart", (e) => {
         dragId = f.id;
@@ -272,6 +283,166 @@
     });
     $("grid").replaceChildren(...items);
   }
+
+  // --- only me and family (#6, docs/decisions/0009-local-face-recognition.md) ---
+  async function faceAction(action, body, busyText, doneText) {
+    const status = $("faces-status");
+    const buttons = Array.from($("step-faces").querySelectorAll("button, input"));
+    buttons.forEach((b) => (b.disabled = true));
+    if (busyText) setStatus(status, busyText);
+    try {
+      const data = await api(`/api/faces/${action}`, body);
+      state = data;
+      render();
+      setStatus(status, typeof doneText === "function" ? doneText(data) : doneText || "");
+    } catch (err) {
+      setStatus(status, err.message, true);
+    } finally {
+      buttons.forEach((b) => (b.disabled = false));
+      if (state && state.faces) renderFaces();
+    }
+  }
+
+  function selectPeople(ids, enabled) {
+    faceAction("select", { person_ids: ids, enabled: enabled });
+  }
+
+  function renderFaces() {
+    const fs = state.faces;
+    $("step-faces").hidden = false;
+    $("faces-unavailable").hidden = fs.available && !fs.store_error;
+    $("faces-unavailable").textContent = fs.message || fs.store_error || "";
+    $("faces-path").textContent = fs.data_path;
+    $("face-analyze").disabled = !fs.available;
+    $("ref-add").disabled = !fs.available;
+    $("face-interval").value = String(fs.interval);
+    $("face-enabled").checked = fs.enabled;
+
+    const people = fs.people.map((p) => {
+      const item = document.createElement("li");
+      const label = document.createElement("label");
+      label.className = "check";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = fs.selected.includes(p.id);
+      box.addEventListener("change", () => {
+        const ids = fs.selected.filter((x) => x !== p.id);
+        if (box.checked) ids.push(p.id);
+        selectPeople(ids, fs.enabled);
+      });
+      const name = document.createElement("span");
+      name.textContent = p.name;
+      label.append(box, name);
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = `（${p.count} 個人臉樣本）`;
+      const rename = document.createElement("button");
+      rename.type = "button";
+      rename.className = "move";
+      rename.textContent = "改名";
+      rename.addEventListener("click", () => {
+        const next = prompt("新的名字", p.name);
+        if (next !== null) faceAction("rename", { person_id: p.id, name: next }, "", "已改名。");
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary danger move";
+      remove.textContent = "移除";
+      remove.addEventListener("click", () => {
+        if (confirm(`要移除「${p.name}」和這個人的人臉資料嗎？`)) faceAction("remove", { person_id: p.id }, "", "已移除。");
+      });
+      item.append(label, count, rename, remove);
+      return item;
+    });
+    if (!people.length) people.push(li("還沒有保存任何人。可以先按「偵測人臉」再從分組中選，或用參考照片新增。"));
+    $("people").replaceChildren(...people);
+
+    $("clusters-box").hidden = !fs.analyzed;
+    const cards = fs.clusters.map((c) => {
+      const card = document.createElement("div");
+      card.className = "cluster";
+      const title = document.createElement("div");
+      title.textContent = `第 ${c.id} 組：${c.faces} 張人臉，出現在 ${c.files} 個檔案` + (c.person ? `（看起來是「${c.person}」）` : "");
+      const faces = document.createElement("div");
+      faces.className = "faces";
+      c.samples.forEach((i) => {
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.alt = `第 ${c.id} 組的人臉`;
+        img.src = `/api/faces/crop?face=${i}&token=${encodeURIComponent(token)}`;
+        faces.appendChild(img);
+      });
+      const row = document.createElement("div");
+      row.className = "row";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "名字";
+      input.setAttribute("aria-label", `第 ${c.id} 組的名字`);
+      const save = document.createElement("button");
+      save.type = "button";
+      save.className = "secondary move";
+      save.textContent = "存成這個人";
+      save.addEventListener("click", () =>
+        faceAction("save-cluster", { cluster_id: c.id, name: input.value }, "", (d) => `已保存「${d.saved}」。記得勾選要保留的人。`)
+      );
+      row.append(input, save);
+      if (fs.people.length) {
+        const pick = document.createElement("select");
+        pick.setAttribute("aria-label", `第 ${c.id} 組要加到誰`);
+        fs.people.forEach((p) => {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.name;
+          pick.appendChild(opt);
+        });
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "secondary move";
+        add.textContent = "加到";
+        add.addEventListener("click", () =>
+          faceAction("save-cluster", { cluster_id: c.id, person_id: pick.value }, "", (d) => `已加到「${d.saved}」。`)
+        );
+        row.append(add, pick);
+      }
+      card.append(title, faces, row);
+      return card;
+    });
+    if (fs.analyzed && !cards.length) {
+      const none = document.createElement("p");
+      none.textContent = "沒有偵測到任何人臉。";
+      cards.push(none);
+    }
+    $("clusters").replaceChildren(...cards);
+
+    let summary = "";
+    if (fs.counts) {
+      summary = `依目前勾選：保留 ${fs.counts.kept} 個（其中不確定 ${fs.counts.uncertain} 個），排除 ${fs.counts.excluded} 個。`;
+      summary += fs.enabled ? "輸出時只會複製保留的檔案，排除的會列在報告中。" : "勾選上面的選項後，輸出才會套用。";
+    } else if (fs.enabled) {
+      summary = fs.analyzed ? "請勾選至少一個要保留的人。" : "請先按「偵測人臉」。";
+    }
+    $("face-summary").textContent = summary;
+  }
+
+  $("face-analyze").addEventListener("click", () =>
+    faceAction("analyze", { interval: Number($("face-interval").value) }, "偵測人臉中，照片和影片多時需要一些時間…", (d) =>
+      `完成：找到 ${d.faces.clusters.reduce((n, c) => n + c.faces, 0)} 張人臉，分成 ${d.faces.clusters.length} 組。`
+    )
+  );
+  $("face-enabled").addEventListener("change", (e) => selectPeople(state.faces.selected, e.target.checked));
+  $("pick-ref").addEventListener("click", () => openPicker($("ref-dir"), false, "選擇參考照片資料夾"));
+  $("ref-add").addEventListener("click", () =>
+    faceAction("reference", { name: $("ref-name").value, folder: $("ref-dir").value }, "讀取參考照片中…", (d) => {
+      const r = d.reference;
+      let msg = `已加入「${r.person}」：使用 ${r.used.length} 張照片。`;
+      if (r.skipped.length) msg += `沒有偵測到人臉而略過：${r.skipped.join("、")}。`;
+      return msg + "記得勾選要保留的人。";
+    })
+  );
+  $("faces-delete").addEventListener("click", () => {
+    if (!confirm("要刪除這台電腦上保存的所有人臉資料嗎？保存的人物都會消失，照片不受影響。")) return;
+    faceAction("delete-all", {}, "", (d) => (d.deleted ? "已刪除本機人臉資料。" : "沒有保存的人臉資料；這次偵測的結果也已清除。"));
+  });
 
   // --- folder picker (docs/decisions/0006-in-page-folder-picker.md) ---------
   const picker = { field: null, listing: null };
@@ -327,10 +498,10 @@
     }
   }
 
-  async function openPicker(field, allowCreate) {
+  async function openPicker(field, allowCreate, title) {
     picker.field = field;
     picker.listing = null;
-    $("picker-title").textContent = allowCreate ? "選擇輸出資料夾" : "選擇照片資料夾";
+    $("picker-title").textContent = title || (allowCreate ? "選擇輸出資料夾" : "選擇照片資料夾");
     $("picker-new").hidden = !allowCreate;
     $("picker-new-name").value = "";
     $("picker-list").replaceChildren();

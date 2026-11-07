@@ -10,6 +10,7 @@ import csv
 import json
 import os
 import shutil
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from .ordering import CONFIDENCE_LABEL, OrderResult
@@ -24,6 +25,32 @@ _KIND_LABEL = {"photo": "照片", "video": "影片"}
 
 class OutputError(Exception):
     """The output folder cannot be used. The message is shown to the owner."""
+
+
+@dataclass
+class FaceFilter:
+    """Only files whose decision says keep are written (#6).
+
+    decisions maps file id -> an object with .keep, .label and .reason
+    (travelphotos.faces.matching.Decision).
+    """
+
+    people: list[str]
+    decisions: dict = field(default_factory=dict)
+
+
+def filter_by_faces(result: OrderResult, face_filter: FaceFilter | None) -> tuple[OrderResult, list]:
+    """(kept placements renumbered 1..n, excluded placements)."""
+    if face_filter is None:
+        return result, []
+    kept, excluded = [], []
+    for p in result.placements:
+        d = face_filter.decisions.get(p.file.id)
+        if d is None:
+            raise OutputError("人物篩選結果不是最新的，請重新偵測人臉。")
+        (kept if d.keep else excluded).append(p)
+    kept = [replace(p, position=i) for i, p in enumerate(kept, start=1)]
+    return OrderResult(placements=kept, groups=result.groups), excluded
 
 
 def _inside(child: str, parent: str) -> bool:
@@ -76,8 +103,19 @@ def output_name(position: int, total: int, original: str) -> str:
     return f"{position:0{width}d}_{original}"
 
 
-def apply(scan: ScanResult, result: OrderResult, output_dir: str, chat_summary: list | None = None) -> dict:
-    """Write (or re-order) the output folder. Returns a short summary."""
+def apply(
+    scan: ScanResult,
+    result: OrderResult,
+    output_dir: str,
+    chat_summary: list | None = None,
+    face_filter: FaceFilter | None = None,
+) -> dict:
+    """Write (or re-order) the output folder. Returns a short summary.
+
+    With face_filter, only files with a selected person are written; the
+    others are listed in the report with the reason.
+    """
+    result, excluded = filter_by_faces(result, face_filter)
     manifest = check_output_dir(scan.input_dir, output_dir)
     out = os.path.realpath(os.path.expanduser(output_dir.strip()))
     managed: dict[str, str] = dict(manifest["files"]) if manifest else {}
@@ -138,7 +176,9 @@ def apply(scan: ScanResult, result: OrderResult, output_dir: str, chat_summary: 
 
         # Reports and manifest: write new copies first, then swap them in,
         # keeping the old ones until the very end. The manifest goes last.
-        _write_reports(out, scan, result, chat_summary or [], targets, prefix=_TMP_PREFIX, create=create)
+        _write_reports(
+            out, scan, result, chat_summary or [], targets, prefix=_TMP_PREFIX, create=create, face_filter=face_filter, excluded=excluded
+        )
         with open(create(_TMP_PREFIX + MANIFEST), "w", encoding="utf-8") as fh:
             json.dump(
                 {
@@ -181,13 +221,28 @@ def apply(scan: ScanResult, result: OrderResult, output_dir: str, chat_summary: 
         "copied": copied,
         "renamed": renamed,
         "duplicates_skipped": len(scan.duplicates),
+        "face_excluded": len(excluded),
         "leftovers": leftovers,
         "report": os.path.join(out, REPORT_CSV),
     }
 
 
-def report_rows(scan: ScanResult, result: OrderResult, targets: dict[str, str] | None = None) -> list[dict]:
+def report_rows(
+    scan: ScanResult,
+    result: OrderResult,
+    targets: dict[str, str] | None = None,
+    face_filter: FaceFilter | None = None,
+    excluded: list | None = None,
+) -> list[dict]:
+    """Rows for report.csv: written files in order, then files left out."""
     total = len(result.placements)
+
+    def faces(fid: str) -> str:
+        if face_filter is None:
+            return ""
+        d = face_filter.decisions[fid]
+        return f"{d.label}：{d.reason}"
+
     rows = []
     for p in result.placements:
         name = targets[p.file.sha256] if targets else output_name(p.position, total, p.file.name)
@@ -203,6 +258,23 @@ def report_rows(scan: ScanResult, result: OrderResult, targets: dict[str, str] |
                 "分組": p.group,
                 "行程站點": f"{p.stop.index}. {p.stop.name}" if p.stop else ("未對應" if p.unmatched else ""),
                 "手動調整": "是" if p.manual else "",
+                "人物篩選": faces(p.file.id),
+            }
+        )
+    for p in excluded or []:
+        rows.append(
+            {
+                "新順序": "",
+                "新檔名": "",
+                "原始檔案": p.file.id,
+                "類型": _KIND_LABEL.get(p.file.kind, p.file.kind),
+                "可信度": CONFIDENCE_LABEL[p.confidence],
+                "排序依據": "人物篩選：未輸出",
+                "推定時間": p.estimated_time.strftime("%Y-%m-%d %H:%M:%S") if p.estimated_time else "",
+                "分組": p.group,
+                "行程站點": f"{p.stop.index}. {p.stop.name}" if p.stop else ("未對應" if p.unmatched else ""),
+                "手動調整": "是" if p.manual else "",
+                "人物篩選": faces(p.file.id),
             }
         )
     for d in scan.duplicates:
@@ -218,12 +290,13 @@ def report_rows(scan: ScanResult, result: OrderResult, targets: dict[str, str] |
                 "分組": "",
                 "行程站點": "",
                 "手動調整": "",
+                "人物篩選": "",
             }
         )
     return rows
 
 
-REPORT_FIELDS = ["新順序", "新檔名", "原始檔案", "類型", "可信度", "排序依據", "推定時間", "分組", "行程站點", "手動調整"]
+REPORT_FIELDS = ["新順序", "新檔名", "原始檔案", "類型", "可信度", "排序依據", "推定時間", "分組", "行程站點", "手動調整", "人物篩選"]
 
 
 def _rollback(out: str, undo: list[tuple[str, str, str | None]]) -> list[str]:
@@ -248,11 +321,13 @@ def _write_reports(
     targets: dict[str, str],
     prefix: str = "",
     create=None,
+    face_filter: FaceFilter | None = None,
+    excluded: list | None = None,
 ) -> None:
     def path(name: str) -> str:
         return create(prefix + name) if create else os.path.join(out, prefix + name)
 
-    rows = report_rows(scan, result, targets)
+    rows = report_rows(scan, result, targets, face_filter, excluded)
     # utf-8-sig so Excel shows the Chinese headers correctly.
     with open(path(REPORT_CSV), "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=REPORT_FIELDS)
@@ -268,6 +343,13 @@ def _write_reports(
                 "unsupported_files": scan.skipped,
                 "line_chat_reference": chat_summary,
                 "files": rows[: len(result.placements)],
+                "face_filter": None
+                if face_filter is None
+                else {
+                    "people": face_filter.people,
+                    "kept": len(result.placements),
+                    "excluded": rows[len(result.placements) : len(result.placements) + len(excluded or [])],
+                },
             },
             fh,
             ensure_ascii=False,

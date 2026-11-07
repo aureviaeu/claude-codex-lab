@@ -12,6 +12,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import folders, itinerary, ordering, output, similarity
+from .face_state import FaceState
+from .faces import pipeline as face_pipeline
+from .faces.engine import FaceUnavailable
+from .faces.store import StoreError
 from .scan import ScanResult, scan
 
 HOST = "127.0.0.1"
@@ -24,8 +28,9 @@ _STATIC = {
 
 
 class AppState:
-    def __init__(self, default_input: str = ""):
+    def __init__(self, default_input: str = "", data_dir: str | None = None, face_engine_factory=None):
         self.lock = threading.Lock()
+        self.faces = FaceState(data_dir, face_engine_factory)
         self.default_input = default_input
         self.scan: ScanResult | None = None
         self.stops: list[itinerary.Stop] = []
@@ -43,6 +48,7 @@ class AppState:
         self.chat_summary = itinerary.summarize_chat(itinerary.parse_line_chat(chat_text or ""))
         self.assignments = {}
         self.manual_order = None
+        self.faces.reset_analysis()
         self._recompute()
 
     def arrange(self, assignments: dict, manual_order: list | None) -> None:
@@ -62,13 +68,44 @@ class AppState:
             self.manual_order = [x for x in manual_order if x in ids]
         self._recompute()
 
+    def face_action(self, action: str, body: dict) -> dict:
+        """POST /api/faces/<action>. Returns extra fields for the response."""
+        faces = self.faces
+        if action == "analyze":
+            if self.scan is None:
+                raise ValueError("請先掃描資料夾。")
+            faces.analyze(self.scan.files, body.get("interval", face_pipeline.DEFAULT_INTERVAL))
+            return {}
+        if action == "reference":
+            info = faces.add_reference(str(body.get("name") or ""), str(body.get("folder") or ""), str(body.get("person_id") or ""))
+            return {"reference": info}
+        if action == "save-cluster":
+            cid = body.get("cluster_id")
+            if not isinstance(cid, int) or isinstance(cid, bool):
+                raise ValueError("人臉分組格式不正確。")
+            return {"saved": faces.save_cluster(cid, str(body.get("name") or ""), str(body.get("person_id") or ""))}
+        if action == "select":
+            faces.select(body.get("person_ids", []), body.get("enabled", False))
+            return {}
+        if action == "rename":
+            faces.rename(str(body.get("person_id") or ""), str(body.get("name") or ""))
+            return {}
+        if action == "remove":
+            faces.remove_person(str(body.get("person_id") or ""))
+            return {}
+        if action == "delete-all":
+            return {"deleted": faces.delete_all()}
+        raise ValueError("找不到這個動作。")
+
     def _recompute(self) -> None:
         assert self.scan is not None
         self.result = ordering.order(self.scan.files, self.stops, self.assignments, self.manual_order)
 
     def to_json(self) -> dict:
         if self.scan is None or self.result is None:
-            return {"scanned": False, "default_input": self.default_input, "similarity": similarity.available()}
+            return {"scanned": False, "default_input": self.default_input, "similarity": similarity.available(), "faces": self.faces.to_json()}
+        faces = self.faces.to_json()
+        face_decisions = faces["decisions"]
         groups = []
         for g in self.result.groups:
             groups.append({"id": g.id, "size": len(g.members), "first": g.members[0].id, "stop": g.stop.index if g.stop else None})
@@ -88,6 +125,7 @@ class AppState:
                     "stop": p.stop.index if p.stop else None,
                     "unmatched": p.unmatched,
                     "manual": p.manual,
+                    "face": face_decisions.get(p.file.id),
                 }
             )
         return {
@@ -103,6 +141,7 @@ class AppState:
             "assignments": self.assignments,
             "manual": self.manual_order is not None,
             "chat": self.chat_summary,
+            "faces": faces,
         }
 
 
@@ -173,6 +212,20 @@ def make_handler(state: AppState, token: str):
                     self._json(HTTPStatus.OK, folders.list_folders((req["query"].get("path") or [""])[0]))
                 except folders.FolderError as exc:
                     self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            elif path == "/api/faces/crop":
+                try:
+                    index = int((req["query"].get("face") or [""])[0])
+                except ValueError:
+                    index = -1
+                with state.lock:
+                    hit = state.faces.hit(index)
+                    files = {f.id: f for f in state.scan.files} if state.scan else {}
+                item = files.get(hit.file_id) if hit else None
+                data = face_pipeline.crop_jpeg(item.path, item.kind, hit.frame, hit.face.box) if item else None
+                if data is None:
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "沒有人臉圖"})
+                else:
+                    self._send(HTTPStatus.OK, data, "image/jpeg")
             elif path == "/api/thumb":
                 fid = (req["query"].get("id") or [""])[0]
                 with state.lock:
@@ -224,11 +277,20 @@ def make_handler(state: AppState, token: str):
                     elif path == "/api/apply":
                         if state.scan is None or state.result is None:
                             raise ValueError("請先掃描資料夾。")
-                        summary = output.apply(state.scan, state.result, str(body.get("output_dir") or ""), state.chat_summary)
+                        summary = output.apply(
+                            state.scan,
+                            state.result,
+                            str(body.get("output_dir") or ""),
+                            state.chat_summary,
+                            face_filter=state.faces.output_filter(),
+                        )
                         self._json(HTTPStatus.OK, {"applied": summary, **state.to_json()})
+                    elif path.startswith("/api/faces/"):
+                        extra = state.face_action(path[len("/api/faces/") :], body)
+                        self._json(HTTPStatus.OK, {**extra, **state.to_json()})
                     else:
                         self._json(HTTPStatus.NOT_FOUND, {"error": "找不到"})
-            except (ValueError, FileNotFoundError, output.OutputError) as exc:
+            except (ValueError, FileNotFoundError, output.OutputError, FaceUnavailable, StoreError) as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except OSError as exc:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"檔案操作失敗：{exc}"})
@@ -236,9 +298,11 @@ def make_handler(state: AppState, token: str):
     return Handler
 
 
-def create_server(port: int = 8765, default_input: str = "") -> tuple[ThreadingHTTPServer, str, AppState]:
+def create_server(
+    port: int = 8765, default_input: str = "", data_dir: str | None = None, face_engine_factory=None
+) -> tuple[ThreadingHTTPServer, str, AppState]:
     """Create the server bound to 127.0.0.1. Returns (server, url, state)."""
-    state = AppState(default_input)
+    state = AppState(default_input, data_dir, face_engine_factory)
     token = secrets.token_urlsafe(24)
     server = ThreadingHTTPServer((HOST, port), make_handler(state, token))
     server.daemon_threads = True
