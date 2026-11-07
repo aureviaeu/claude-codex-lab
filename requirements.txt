@@ -1,2 +1,5 @@
 # Runtime: Pillow reads photos for content similarity and previews.
 Pillow>=10.0,<13
+# Faces (#6): OpenCV runs the local face models; numpy holds images and features.
+opencv-python-headless>=4.8,<5
+numpy>=1.24,<3

@@ -7,6 +7,7 @@ See docs/decisions/0007-one-click-launcher.md.
 - Creates `.venv/` inside the project folder (never touches the system Python).
 - Installs requirements.txt into it, but only when the file changed since the
   last successful install (a hash is kept in `.venv/.travelphotos-requirements`).
+- Downloads the face model files once (launcher/download_models.py).
 - Starts `python -m travelphotos` with that environment.
 """
 
@@ -153,6 +154,15 @@ def ensure_env(root: str = ROOT, log=print, builder=None) -> str:
     return python
 
 
+def ensure_face_models(python: str) -> None:
+    """Fetch the face model files when missing (#6). A failure only disables
+    the face features, so the tool still starts; the page explains it."""
+    try:
+        subprocess.call([python, os.path.join(ROOT, "launcher", "download_models.py")], cwd=ROOT)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     prepare_only = "--prepare-only" in args
@@ -169,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if prepare_only:
         return 0
+    ensure_face_models(python)
     try:
         return subprocess.call([python, "-m", "travelphotos", *args], cwd=ROOT)
     except KeyboardInterrupt:
