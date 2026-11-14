@@ -213,6 +213,13 @@ def apply(
                 move(final, backup)
                 backups.append(backup)
             move(_TMP_PREFIX + final, final)
+        if places is None and os.path.exists(os.path.join(out, PLACES_MD)):
+            # A summary from an earlier run would no longer match this
+            # output. Moved aside like the other backups, so a failure
+            # brings it back, and removed below once everything is written.
+            backup = f"{_TMP_PREFIX}old-{PLACES_MD}"
+            move(PLACES_MD, backup)
+            backups.append(backup)
     except BaseException as exc:
         failed = _rollback(out, undo)
         if failed:

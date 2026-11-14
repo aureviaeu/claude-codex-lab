@@ -281,6 +281,39 @@ class OutputTests(PlaceFixture):
         self.assertFalse(os.path.exists(os.path.join(out, output.PLACES_MD)))
 
 
+    def test_old_places_md_is_removed_when_no_longer_written(self):
+        r = self.analyze()
+        res = ordering.order(self.scan.files, self.stops, r.assignments())
+        out = os.path.join(self.tmp.name, "out3")
+        output.apply(self.scan, res, out, places=output.PlaceContext(self.stops, r))
+        self.assertTrue(os.path.isfile(os.path.join(out, output.PLACES_MD)))
+        output.apply(self.scan, ordering.order(self.scan.files), out)
+        self.assertFalse(os.path.exists(os.path.join(out, output.PLACES_MD)))
+        leftovers = [n for n in os.listdir(out) if n.startswith(".travelphotos-tmp")]
+        self.assertEqual(leftovers, [])
+
+    def test_failed_output_keeps_the_old_places_md(self):
+        from unittest import mock
+
+        r = self.analyze()
+        res = ordering.order(self.scan.files, self.stops, r.assignments())
+        out = os.path.join(self.tmp.name, "out4")
+        output.apply(self.scan, res, out, places=output.PlaceContext(self.stops, r))
+        with open(os.path.join(out, output.PLACES_MD), encoding="utf-8") as fh:
+            before = fh.read()
+        real_dump = json.dump
+
+        def boom(obj, fh, **kw):
+            if isinstance(obj, dict) and "files" in obj and "version" in obj:
+                raise OSError("disk full")
+            return real_dump(obj, fh, **kw)
+
+        with mock.patch.object(output.json, "dump", boom), self.assertRaises(output.OutputError):
+            output.apply(self.scan, ordering.order(self.scan.files), out)
+        with open(os.path.join(out, output.PLACES_MD), encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), before, "rolled back")
+
+
 class CloudTests(PlaceFixture):
     def test_cloud_is_off_by_default_and_never_implemented(self):
         self.assertFalse(cloud.cloud_requested({}))
