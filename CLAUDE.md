@@ -81,6 +81,7 @@ In this mode, an unclear product direction is not a reason to stop: decide it as
 - it needs a security decision (auth, trust boundary, permissions, exposure, crypto)
 - it failed three times
 - you will not fix a Codex P0 or P1 (step 8 above)
+- you disagree with a P0 from the subagent code review
 - it needs a change under `.github/` that the issue does not explicitly ask for
 
 To stop on an issue:
