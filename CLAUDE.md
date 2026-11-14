@@ -113,7 +113,7 @@ Language, framework, libraries, and structure are yours to decide. Do not ask th
 
 Before you open the pull request, start one independent subagent to review the change.
 
-- Give it only the diff against `main`, the feature's spec (the owner's request, or the issue), and this file. It does not see your conversation.
+- Give it only the diff against the pull request's base branch (`main` in one-feature mode, `dev` in continuous mode), the feature's spec (the owner's request, or the issue), and this file. It does not see your conversation.
 - Ask it to report only P0 and P1 findings, each with severity, file and line, why it matters, and a suggested fix:
   - **P0**: security holes, data loss, crashes, a broken build or CI, committed secrets, photos or photo data leaving the computer, a new cloud or paid service, or a change to a protected path the owner did not ask for.
   - **P1**: clear functional bugs, logic errors that break the spec, missing error handling that will fail in normal use.
