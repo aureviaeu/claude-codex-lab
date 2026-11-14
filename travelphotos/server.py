@@ -16,6 +16,9 @@ from .face_state import FaceState
 from .faces import pipeline as face_pipeline
 from .faces.engine import FaceUnavailable
 from .faces.store import StoreError
+from .places import pipeline as place_pipeline
+from .places import summary as place_summary
+from .places.ocr import OcrUnavailable
 from .scan import ScanResult, scan
 
 HOST = "127.0.0.1"
@@ -28,8 +31,13 @@ _STATIC = {
 
 
 class AppState:
-    def __init__(self, default_input: str = "", data_dir: str | None = None, face_engine_factory=None):
+    def __init__(self, default_input: str = "", data_dir: str | None = None, face_engine_factory=None, place_engine_factory=None):
         self.lock = threading.Lock()
+        self.data_dir = data_dir
+        self._place_engine_factory = place_engine_factory
+        self._place_engine = None
+        self.places: place_pipeline.PlaceResult | None = None
+        self.auto_assignments: dict[str, int] = {}
         self.faces = FaceState(data_dir, face_engine_factory)
         self.default_input = default_input
         self.scan: ScanResult | None = None
@@ -48,6 +56,8 @@ class AppState:
         self.chat_summary = itinerary.summarize_chat(itinerary.parse_line_chat(chat_text or ""))
         self.assignments = {}
         self.manual_order = None
+        self.places = None
+        self.auto_assignments = {}
         self.faces.reset_analysis()
         self._recompute()
 
@@ -67,6 +77,40 @@ class AppState:
                 raise ValueError("順序格式不正確。")
             self.manual_order = [x for x in manual_order if x in ids]
         self._recompute()
+
+    def place_engine(self):
+        if self._place_engine is None:
+            if self._place_engine_factory is not None:
+                self._place_engine = self._place_engine_factory()
+            else:
+                from .places.ocr import load_engine
+
+                self._place_engine = load_engine(self.data_dir)
+        return self._place_engine
+
+    def analyze_places(self) -> None:
+        """Read signs and match every group to a stop (#7).
+
+        Automatic stops fill only groups the owner has not set by hand; an
+        earlier automatic stop the owner left alone is replaced.
+        """
+        if self.scan is None:
+            raise ValueError("請先掃描資料夾。")
+        places = place_pipeline.analyze(self.scan.files, self.stops, self.place_engine())
+        assignments = {k: v for k, v in self.assignments.items() if self.auto_assignments.get(k) != v}
+        by_file = places.by_file()
+        manual_groups = {by_file[fid].key for fid in assignments if fid in by_file}
+        auto = {k: v for k, v in places.assignments().items() if k not in manual_groups}
+        self.places = places
+        self.auto_assignments = auto
+        self.assignments = {**assignments, **auto}
+        self._recompute()
+
+    def places_json(self) -> dict:
+        info: dict = {"analyzed": self.places is not None, "summary": None}
+        if self.result is not None and (self.places is not None or self.stops):
+            info["summary"] = place_summary.build(self.result.placements, self.stops, self.places)
+        return info
 
     def face_action(self, action: str, body: dict) -> dict:
         """POST /api/faces/<action>. Returns extra fields for the response."""
@@ -108,7 +152,16 @@ class AppState:
         face_decisions = faces["decisions"]
         groups = []
         for g in self.result.groups:
-            groups.append({"id": g.id, "size": len(g.members), "first": g.members[0].id, "stop": g.stop.index if g.stop else None})
+            label, evidence = place_summary.group_label(g.stop, self.places, g.members[0].id)
+            groups.append(
+                {
+                    "id": g.id,
+                    "size": len(g.members),
+                    "first": g.members[0].id,
+                    "stop": g.stop.index if g.stop else None,
+                    "place": {"confidence": label, "evidence": evidence} if (self.places is not None or g.stop) else None,
+                }
+            )
         files = []
         for p in self.result.placements:
             files.append(
@@ -142,6 +195,7 @@ class AppState:
             "manual": self.manual_order is not None,
             "chat": self.chat_summary,
             "faces": faces,
+            "places": self.places_json(),
         }
 
 
@@ -283,14 +337,18 @@ def make_handler(state: AppState, token: str):
                             str(body.get("output_dir") or ""),
                             state.chat_summary,
                             face_filter=state.faces.output_filter(),
+                            places=output.PlaceContext(state.stops, state.places) if (state.stops or state.places) else None,
                         )
                         self._json(HTTPStatus.OK, {"applied": summary, **state.to_json()})
+                    elif path == "/api/places/analyze":
+                        state.analyze_places()
+                        self._json(HTTPStatus.OK, state.to_json())
                     elif path.startswith("/api/faces/"):
                         extra = state.face_action(path[len("/api/faces/") :], body)
                         self._json(HTTPStatus.OK, {**extra, **state.to_json()})
                     else:
                         self._json(HTTPStatus.NOT_FOUND, {"error": "找不到"})
-            except (ValueError, FileNotFoundError, output.OutputError, FaceUnavailable, StoreError) as exc:
+            except (ValueError, FileNotFoundError, output.OutputError, FaceUnavailable, StoreError, OcrUnavailable) as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except OSError as exc:
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"檔案操作失敗：{exc}"})
@@ -299,10 +357,10 @@ def make_handler(state: AppState, token: str):
 
 
 def create_server(
-    port: int = 8765, default_input: str = "", data_dir: str | None = None, face_engine_factory=None
+    port: int = 8765, default_input: str = "", data_dir: str | None = None, face_engine_factory=None, place_engine_factory=None
 ) -> tuple[ThreadingHTTPServer, str, AppState]:
     """Create the server bound to 127.0.0.1. Returns (server, url, state)."""
-    state = AppState(default_input, data_dir, face_engine_factory)
+    state = AppState(default_input, data_dir, face_engine_factory, place_engine_factory)
     token = secrets.token_urlsafe(24)
     server = ThreadingHTTPServer((HOST, port), make_handler(state, token))
     server.daemon_threads = True
