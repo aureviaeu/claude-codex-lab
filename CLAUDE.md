@@ -34,7 +34,7 @@ This is the default mode.
 
 ## Continuous development mode
 
-Use this mode only when the owner asks for it in the session. The owner is not watching. You do not ask questions. You make product decisions yourself, and you stop on an issue only in the cases under [Stopping on an issue](#stopping-on-an-issue).
+Use this mode only when the owner asks for it in the session. The owner is not watching. You do not ask questions. You make product decisions yourself, and you stop on an issue only in the cases under [Stopping on an issue](#stopping-on-an-issue). Wherever another section of this file says to stop, ask the owner, or show the owner something, in this mode that means stop on the issue as described there, then go to the next issue.
 
 ### Work list
 
