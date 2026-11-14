@@ -2,7 +2,7 @@
 
 These are the rules for one cloud session that builds one feature from start to finish. The owner, `aureviaeu`, describes the feature in the session. You implement it, test it, have it reviewed by an independent subagent, and open one pull request for the owner to accept.
 
-[AGENTS.md](AGENTS.md) describes the roles and Codex's review rules. Where AGENTS.md describes the scheduled, label-driven workflow (one thing per run, `proposed` / `ready` / `in-progress` / `acceptance` labels, the 24-hour Codex wait) or Codex review, it does not apply to a session run under this file. Codex is not used.
+[AGENTS.md](AGENTS.md) describes the roles and Codex's review rules. Where AGENTS.md describes the scheduled, label-driven workflow (one thing per run, `proposed` / `ready` / `in-progress` / `acceptance` labels, the 24-hour Codex wait) or Codex review, it does not apply to a session run under this file. Codex is not used. For a session run under this file, CLAUDE.md takes precedence over AGENTS.md wherever they differ, including branch names, pull request requirements, and how to stop. AGENTS.md still applies to anything this file does not cover.
 
 ## Roles
 
