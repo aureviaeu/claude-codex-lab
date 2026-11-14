@@ -38,6 +38,9 @@ class AppState:
         self._place_engine = None
         self.places: place_pipeline.PlaceResult | None = None
         self.auto_assignments: dict[str, int] = {}
+        # Groups (by smallest file id) the owner set to 未對應 by hand; the
+        # places step leaves them unknown until the owner picks a stop.
+        self.cleared_groups: set[str] = set()
         self.faces = FaceState(data_dir, face_engine_factory)
         self.default_input = default_input
         self.scan: ScanResult | None = None
@@ -58,6 +61,7 @@ class AppState:
         self.manual_order = None
         self.places = None
         self.auto_assignments = {}
+        self.cleared_groups = set()
         self.faces.reset_analysis()
         self._recompute()
 
@@ -69,6 +73,7 @@ class AppState:
         for fid, stop in (assignments or {}).items():
             if fid in ids and isinstance(stop, int) and not isinstance(stop, bool):
                 clean[fid] = stop
+        self._track_cleared(self.assignments, clean)
         self.assignments = clean
         if manual_order is None:
             self.manual_order = None
@@ -77,6 +82,22 @@ class AppState:
                 raise ValueError("順序格式不正確。")
             self.manual_order = [x for x in manual_order if x in ids]
         self._recompute()
+
+    def _group_keys(self) -> dict[str, str]:
+        """file id -> group key (smallest file id), from the current order."""
+        keys: dict[str, str] = {}
+        for g in self.result.groups if self.result else []:
+            key = min(f.id for f in g.members)
+            for f in g.members:
+                keys[f.id] = key
+        return keys
+
+    def _track_cleared(self, old: dict[str, int], new: dict[str, int]) -> None:
+        """A group that had a stop and now has none was set to 未對應 by hand."""
+        keys = self._group_keys()
+        had = {keys[f] for f in old if f in keys}
+        has = {keys[f] for f in new if f in keys}
+        self.cleared_groups = (self.cleared_groups | (had - has)) - has
 
     def place_engine(self):
         if self._place_engine is None:
@@ -100,7 +121,7 @@ class AppState:
         assignments = {k: v for k, v in self.assignments.items() if self.auto_assignments.get(k) != v}
         by_file = places.by_file()
         manual_groups = {by_file[fid].key for fid in assignments if fid in by_file}
-        auto = {k: v for k, v in places.assignments().items() if k not in manual_groups}
+        auto = {k: v for k, v in places.assignments().items() if k not in manual_groups and k not in self.cleared_groups}
         self.places = places
         self.auto_assignments = auto
         self.assignments = {**assignments, **auto}

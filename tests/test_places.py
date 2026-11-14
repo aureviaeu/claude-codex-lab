@@ -361,6 +361,37 @@ class PlaceApiTests(PlaceFixture):
         self.assertNotIn("d1.jpg", data["assignments"])
         self.assertEqual(state.auto_assignments.get("a1.jpg"), 1)
 
+    def test_manual_unknown_survives_a_rerun(self):
+        self.start(lambda: FakeOcr(self.texts))
+        self.api("/api/scan", {"input_dir": self.inp, "itinerary": ITINERARY})
+        status, data = self.api("/api/places/analyze", {})
+        self.assertEqual(data["assignments"]["d1.jpg"], 4)
+        # The owner sets D's group to 未對應 (the page drops its assignment).
+        cleared = {k: v for k, v in data["assignments"].items() if k != "d1.jpg"}
+        status, data = self.api("/api/arrange", {"assignments": cleared})
+        self.assertEqual(status, 200, data)
+        status, data = self.api("/api/places/analyze", {})
+        self.assertEqual(status, 200, data)
+        self.assertNotIn("d1.jpg", data["assignments"], "manual 未對應 is kept")
+        group = next(g for g in data["groups"] if g["first"] == "d1.jpg")
+        self.assertIsNone(group["stop"])
+        self.assertEqual(data["assignments"]["a1.jpg"], 1, "other groups are still matched")
+        # Choosing a stop again for that group lifts the manual 未對應.
+        status, data = self.api("/api/arrange", {"assignments": {**data["assignments"], "d1.jpg": 5}})
+        status, data = self.api("/api/places/analyze", {})
+        self.assertEqual(data["assignments"]["d1.jpg"], 5)
+
+    def test_rescan_forgets_manual_unknown(self):
+        state = self.start(lambda: FakeOcr(self.texts))
+        self.api("/api/scan", {"input_dir": self.inp, "itinerary": ITINERARY})
+        status, data = self.api("/api/places/analyze", {})
+        self.api("/api/arrange", {"assignments": {k: v for k, v in data["assignments"].items() if k != "d1.jpg"}})
+        self.assertEqual(state.cleared_groups, {"d1.jpg"})
+        self.api("/api/scan", {"input_dir": self.inp, "itinerary": ITINERARY})
+        self.assertEqual(state.cleared_groups, set())
+        status, data = self.api("/api/places/analyze", {})
+        self.assertEqual(data["assignments"]["d1.jpg"], 4)
+
     def test_missing_models_is_a_clear_error(self):
         def missing():
             raise OcrUnavailable("還沒有下載文字辨識模型")
