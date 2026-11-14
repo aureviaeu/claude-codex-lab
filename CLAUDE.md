@@ -77,7 +77,9 @@ The other cases in [When to stop and ask the owner](#when-to-stop-and-ask-the-ow
 
 ### When the work list is empty
 
-Open one pull request from `dev` to `main`. If an open one already exists, update its body instead of opening another. The body keeps the sections from `.github/pull_request_template.md` and lists:
+If `dev` has no commits that `main` lacks and no `dev` → `main` pull request is open (nothing was merged this time), do not open one: say in the session which issues were skipped and why, then stop.
+
+Otherwise open one pull request from `dev` to `main`. If an open one already exists, update its body instead of opening another. The body keeps the sections from `.github/pull_request_template.md` and lists:
 
 - every feature merged into `dev` since `main`: issue number, title, and the `dev` pull request, with `Closes #<n>` for each issue
 - acceptance steps the owner can follow for each feature, without reading the diff
