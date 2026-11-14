@@ -169,17 +169,44 @@ def _decide_by_look(unknown: list[tuple[GroupPlace, list[float] | None]], known:
             gp.evidence = f"沒有可用的招牌文字；畫面與 {ref.key} 那組（{ref.stop.name}）相似 {best:.2f}"
 
 
-def _resolve_repeats(ordered: list[GroupPlace], stops: list[Stop]) -> None:
-    """Same name more than once in the itinerary: take the next one in order."""
+def _resolve_repeats(ordered: list[tuple[GroupPlace, datetime | None]], stops: list[Stop]) -> None:
+    """Same name more than once in the itinerary (a hotel): pick the visit.
+
+    Groups are walked in time order. When the group has a time, the
+    occurrence on the same trip day (days counted from the earliest group
+    time) wins. Otherwise the next occurrence at or after the last chosen
+    stop is used, and a group on a later date than the previous group at
+    that same stop moves on to a later occurrence, so two visits on
+    different days are never merged even when nothing between them was
+    recognised.
+    """
+    dates = [t.date() for _gp, t in ordered if t is not None]
+    first_day = min(dates) if dates else None
     last = 0
-    for gp in ordered:
+    seen: dict[int, object] = {}  # stop index -> date of the last group placed there
+    for gp, t in ordered:
         if gp.stop is None:
             continue
         name = normalize(gp.stop.name)
-        same = [s for s in stops if normalize(s.name) == name]
-        later = [s for s in same if s.index >= last]
-        gp.stop = min(later or same, key=lambda s: s.index)
-        last = gp.stop.index
+        same = sorted((s for s in stops if normalize(s.name) == name), key=lambda s: s.index)
+        chosen = None
+        if t is not None and first_day is not None and len(same) > 1:
+            trip_day = (t.date() - first_day).days + 1
+            on_day = [s for s in same if s.day == trip_day]
+            if on_day:
+                chosen = min(on_day, key=lambda s: (s.index < last, s.index))
+        if chosen is None:
+            later = [s for s in same if s.index >= last]
+            chosen = later[0] if later else same[0]
+            prev = seen.get(chosen.index)
+            if t is not None and prev is not None and t.date() > prev:
+                after = [s for s in same if s.index > chosen.index]
+                if after:
+                    chosen = after[0]
+        gp.stop = chosen
+        last = chosen.index
+        if t is not None:
+            seen[chosen.index] = t.date()
 
 
 def analyze(files: list[MediaFile], stops: list[Stop] | None, engine, threshold: int = SIMILARITY_THRESHOLD, environ=None) -> PlaceResult:
@@ -203,7 +230,7 @@ def analyze(files: list[MediaFile], stops: list[Stop] | None, engine, threshold:
         unknown = [(gp, _group_layout(m)) for gp, m, _t in entries if gp.stop is None and not gp.evidence.startswith("招牌文字同時像")]
         _decide_by_look(unknown, known)
         far = datetime.max
-        _resolve_repeats([gp for gp, _m, t in sorted(entries, key=lambda e: (e[2] or far, e[0].key))], stops)
+        _resolve_repeats([(gp, t) for gp, _m, t in sorted(entries, key=lambda e: (e[2] or far, e[0].key))], stops)
     for gp in result.groups:
         if gp.stop is None and not gp.evidence:
             gp.evidence = "沒有讀到文字" if stops else "沒有行程表"

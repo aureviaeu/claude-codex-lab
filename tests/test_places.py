@@ -166,6 +166,25 @@ class PipelineTests(PlaceFixture):
         self.assertEqual(self.place_of(r, "c1.jpg").stop.index, 3)
         self.assertEqual(self.place_of(r, "e1.jpg").stop.index, 6)
 
+    def test_repeated_stop_on_another_day_without_a_stop_in_between(self):
+        """Regression (Codex P1): the day-2 hotel must not merge into day 1's."""
+        self.texts[3] = []  # D (day 2, Kinkaku-ji) is no longer recognised
+        r = self.analyze()
+        self.assertIsNone(self.place_of(r, "d1.jpg").stop)
+        self.assertEqual(self.place_of(r, "c1.jpg").stop.index, 3)
+        self.assertEqual(self.place_of(r, "e1.jpg").stop.index, 6)
+        res = ordering.order(self.scan.files, self.stops, r.assignments())
+        s = summary.build(res.placements, self.stops, r)
+        self.assertEqual([v["stop"] for v in s["visits"] if v["name"] == "京都飯店"], [3, 6])
+
+    def test_repeated_stop_without_day_headings_uses_the_date(self):
+        flat = parse_itinerary("清水寺\n伏見稻荷大社\n京都飯店\n金閣寺\n嵐山\n京都飯店")
+        self.assertEqual({st.day for st in flat}, {1})
+        self.texts[3] = []
+        r = pipeline.analyze(self.scan.files, flat, FakeOcr(self.texts), environ={})
+        self.assertEqual(r.by_file()["c1.jpg"].stop.index, 3)
+        self.assertEqual(r.by_file()["e1.jpg"].stop.index, 6)
+
     def test_ambiguous_text_stays_unknown(self):
         self.texts[4] = ["金閣寺 嵐山"]
         r = self.analyze()
