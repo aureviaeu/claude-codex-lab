@@ -56,7 +56,7 @@ Before you open the pull request, start one independent subagent to review the c
   - **P0**: security holes, data loss, crashes, a broken build or CI, committed secrets, photos or photo data leaving the computer, a new cloud or paid service, or a change to a protected path the owner did not ask for.
   - **P1**: clear functional bugs, logic errors that break the spec, missing error handling that will fail in normal use.
 - Fix every P0 and P1 finding. One finding, one commit, when the fixes are independent.
-- If you think a finding is not a defect, say why in the pull request body. If it is a P0, ask the owner instead of declining it yourself.
+- Do not skip a finding because you would rather not fix it. Leave one unfixed only when it is factually wrong (for example, the cited code does not exist or does not do what the finding says), and explain why in the pull request body. If you disagree with a P0, ask the owner instead.
 - After the fixes, run `scripts/test.sh` again. All of it must pass before you push.
 - In the pull request body, list each finding and what you did about it. If the review found nothing, say so.
 
