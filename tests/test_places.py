@@ -71,19 +71,35 @@ ITINERARY = """第1天：清水寺 → 伏見稻荷大社 → 京都飯店
 class MatchingTests(unittest.TestCase):
     def test_traditional_and_simplified_compare_equal(self):
         self.assertEqual(matching.normalize("淺草寺 東京鐵塔"), matching.normalize("浅草寺东京铁塔"))
-        self.assertEqual(matching.name_score("伏見稻荷大社", matching.normalize("伏见稻荷大社 千本鸟居")), 1.0)
+        self.assertEqual(matching.name_score("伏見稻荷大社", "伏见稻荷大社 千本鸟居"), 1.0)
 
     def test_one_misread_character_is_a_medium_match(self):
-        score = matching.name_score("清水寺", matching.normalize("清水芋入口"))
+        score = matching.name_score("清水寺", "清水芋入口")
         self.assertGreaterEqual(score, matching.MIN_SCORE)
         self.assertLess(score, matching.HIGH_SCORE)
 
     def test_unrelated_text_does_not_match(self):
-        self.assertLess(matching.name_score("金閣寺", matching.normalize("出口 EXIT 7-11")), matching.MIN_SCORE)
+        self.assertLess(matching.name_score("金閣寺", "出口 EXIT 7-11"), matching.MIN_SCORE)
         self.assertEqual(matching.best_matches([("a.jpg", "出口")], parse_itinerary(ITINERARY)), [])
 
     def test_latin_names_ignore_case_and_width(self):
-        self.assertEqual(matching.name_score("Shibuya", matching.normalize("ＳＨＩＢＵＹＡ Station")), 1.0)
+        self.assertEqual(matching.name_score("Shibuya", "ＳＨＩＢＵＹＡ Station"), 1.0)
+        self.assertEqual(matching.name_score("Kyoto Hotel", "KYOTO HOTEL 京都饭店"), 1.0)
+        self.assertGreaterEqual(matching.name_score("Kinkakuji", "KINKAKUJl temple"), matching.MIN_SCORE)
+
+    def test_short_names_need_an_exact_match(self):
+        for name, text in [("嵐山", "富士山"), ("嵐山", "山"), ("奈良", "良品"), ("大阪", "大學"), ("京都", "東京"), ("台北", "北口")]:
+            self.assertEqual(matching.name_score(name, text), 0.0, (name, text))
+        self.assertEqual(matching.name_score("嵐山", "岚山 渡月桥"), 1.0)
+
+    def test_latin_names_do_not_match_inside_other_words(self):
+        self.assertEqual(matching.name_score("Nara", "Narita Airport"), 0.0)
+        self.assertEqual(matching.name_score("Nara", "NARA PARK"), 1.0)
+
+    def test_sharing_only_some_characters_is_not_a_match(self):
+        stops = parse_itinerary("清水寺\n嵐山\n金閣寺\n伏見稻荷大社")
+        self.assertEqual(matching.best_matches([("a.jpg", "高山 寺 入口")], stops), [])
+        self.assertEqual(matching.best_matches([("a.jpg", "伏见神社")], stops), [])
 
 
 class PlaceFixture(unittest.TestCase):
