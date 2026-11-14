@@ -7,7 +7,7 @@ See docs/decisions/0007-one-click-launcher.md.
 - Creates `.venv/` inside the project folder (never touches the system Python).
 - Installs requirements.txt into it, but only when the file changed since the
   last successful install (a hash is kept in `.venv/.travelphotos-requirements`).
-- Downloads the face model files once (launcher/download_models.py).
+- Downloads the face and text-reading model files once (launcher/download_models.py).
 - Starts `python -m travelphotos` with that environment.
 """
 

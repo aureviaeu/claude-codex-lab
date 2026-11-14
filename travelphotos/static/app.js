@@ -134,6 +134,7 @@
     $("chat").replaceChildren(head, ...rows);
 
     renderGroups();
+    renderPlaces();
     renderGrid();
     renderFaces();
   }
@@ -173,10 +174,64 @@
         arrange(null, next);
       });
       row.append(label, select);
+      if (g.place) {
+        const info = document.createElement("span");
+        info.className = "note";
+        info.textContent = `可信度：${g.place.confidence}` + (g.place.evidence ? `（${g.place.evidence}）` : "");
+        row.appendChild(info);
+      }
       return row;
     });
     $("groups").replaceChildren(...rows);
   }
+
+  function renderPlaces() {
+    const info = state.places || {};
+    const s = info.summary;
+    $("places-summary").hidden = !s;
+    if (!s) return;
+    $("places-visits").replaceChildren(
+      ...s.visits.map((v) => {
+        const item = document.createElement("li");
+        const text = document.createElement("span");
+        text.textContent = `${v.name}（第 ${v.day} 天第 ${v.stop} 站）：照片 ${v.photos} 張、影片 ${v.videos} 段，可信度 ${v.confidence}`;
+        item.appendChild(text);
+        const rep = state.files.find((f) => f.id === v.representative);
+        if (rep && rep.kind === "photo") {
+          const img = document.createElement("img");
+          img.className = "place-thumb";
+          img.alt = `${v.name} 代表照片`;
+          img.src = `/api/thumb?id=${encodeURIComponent(rep.id)}&token=${encodeURIComponent(token)}`;
+          item.appendChild(img);
+        }
+        return item;
+      })
+    );
+    const u = s.unknown;
+    $("places-unknown").textContent = u.files.length ? `未知：照片 ${u.photos} 張、影片 ${u.videos} 段無法判斷景點。` : "";
+    $("places-missed").textContent = s.missed_stops.length ? "沒有照片的站點：" + s.missed_stops.map((m) => m.name).join("、") : "";
+    $("places-texts-box").hidden = s.texts.length === 0;
+    $("places-texts").replaceChildren(...s.texts.map((t) => li(`${t.group} 那組（${t.stop}）：${t.lines.join("、")}`)));
+  }
+
+  $("places-analyze").addEventListener("click", async () => {
+    const status = $("places-status");
+    const button = $("places-analyze");
+    if (state.manual && !confirm("判斷景點會改變站點對應；手動調整的順序仍會保留。要繼續嗎？")) return;
+    button.disabled = true;
+    setStatus(status, "正在讀取照片中的文字並比對行程表…");
+    try {
+      state = await api("/api/places/analyze", {});
+      render();
+      const s = state.places.summary;
+      const warn = s && s.warnings.length ? " " + s.warnings.join(" ") : "";
+      setStatus(status, (s && s.has_itinerary ? `完成：對應到 ${s.visits.length} 個景點。` : "完成：沒有行程表，只列出讀到的文字，景點都是「未知」。") + warn);
+    } catch (err) {
+      setStatus(status, err.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   let dragId = null;
 

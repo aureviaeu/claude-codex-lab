@@ -19,6 +19,7 @@ from .scan import ScanResult
 MANIFEST = ".travelphotos-manifest.json"
 REPORT_CSV = "report.csv"
 REPORT_JSON = "report.json"
+PLACES_MD = "places.md"
 _TMP_PREFIX = ".travelphotos-tmp-"
 _KIND_LABEL = {"photo": "照片", "video": "影片"}
 
@@ -37,6 +38,18 @@ class FaceFilter:
 
     people: list[str]
     decisions: dict = field(default_factory=dict)
+
+
+@dataclass
+class PlaceContext:
+    """Stops and the automatic place result (#7) for the report and places.md.
+
+    result is a travelphotos.places.pipeline.PlaceResult, or None when the
+    places step was not run (stops chosen by hand still get a summary).
+    """
+
+    stops: list
+    result: object | None = None
 
 
 def filter_by_faces(result: OrderResult, face_filter: FaceFilter | None) -> tuple[OrderResult, list]:
@@ -109,6 +122,7 @@ def apply(
     output_dir: str,
     chat_summary: list | None = None,
     face_filter: FaceFilter | None = None,
+    places: PlaceContext | None = None,
 ) -> dict:
     """Write (or re-order) the output folder. Returns a short summary.
 
@@ -177,7 +191,8 @@ def apply(
         # Reports and manifest: write new copies first, then swap them in,
         # keeping the old ones until the very end. The manifest goes last.
         _write_reports(
-            out, scan, result, chat_summary or [], targets, prefix=_TMP_PREFIX, create=create, face_filter=face_filter, excluded=excluded
+            out, scan, result, chat_summary or [], targets, prefix=_TMP_PREFIX, create=create, face_filter=face_filter, excluded=excluded,
+            places=places,
         )
         with open(create(_TMP_PREFIX + MANIFEST), "w", encoding="utf-8") as fh:
             json.dump(
@@ -192,12 +207,19 @@ def apply(
                 indent=2,
             )
         backups: list[str] = []
-        for final in (REPORT_CSV, REPORT_JSON, MANIFEST):
+        for final in (REPORT_CSV, REPORT_JSON) + ((PLACES_MD,) if places is not None else ()) + (MANIFEST,):
             if os.path.exists(os.path.join(out, final)):
                 backup = f"{_TMP_PREFIX}old-{final}"
                 move(final, backup)
                 backups.append(backup)
             move(_TMP_PREFIX + final, final)
+        if places is None and os.path.exists(os.path.join(out, PLACES_MD)):
+            # A summary from an earlier run would no longer match this
+            # output. Moved aside like the other backups, so a failure
+            # brings it back, and removed below once everything is written.
+            backup = f"{_TMP_PREFIX}old-{PLACES_MD}"
+            move(PLACES_MD, backup)
+            backups.append(backup)
     except BaseException as exc:
         failed = _rollback(out, undo)
         if failed:
@@ -224,6 +246,7 @@ def apply(
         "face_excluded": len(excluded),
         "leftovers": leftovers,
         "report": os.path.join(out, REPORT_CSV),
+        "places_report": os.path.join(out, PLACES_MD) if places is not None else None,
     }
 
 
@@ -233,6 +256,7 @@ def report_rows(
     targets: dict[str, str] | None = None,
     face_filter: FaceFilter | None = None,
     excluded: list | None = None,
+    places: PlaceContext | None = None,
 ) -> list[dict]:
     """Rows for report.csv: written files in order, then files left out."""
     total = len(result.placements)
@@ -242,6 +266,13 @@ def report_rows(
             return ""
         d = face_filter.decisions[fid]
         return f"{d.label}：{d.reason}"
+
+    def place(p) -> str:
+        if places is None:
+            return ""
+        from .places.summary import place_note
+
+        return place_note(p.stop, places.result, p.file.id)
 
     rows = []
     for p in result.placements:
@@ -259,6 +290,7 @@ def report_rows(
                 "行程站點": f"{p.stop.index}. {p.stop.name}" if p.stop else ("未對應" if p.unmatched else ""),
                 "手動調整": "是" if p.manual else "",
                 "人物篩選": faces(p.file.id),
+                "景點判斷": place(p),
             }
         )
     for p in excluded or []:
@@ -275,6 +307,7 @@ def report_rows(
                 "行程站點": f"{p.stop.index}. {p.stop.name}" if p.stop else ("未對應" if p.unmatched else ""),
                 "手動調整": "是" if p.manual else "",
                 "人物篩選": faces(p.file.id),
+                "景點判斷": place(p),
             }
         )
     for d in scan.duplicates:
@@ -291,12 +324,13 @@ def report_rows(
                 "行程站點": "",
                 "手動調整": "",
                 "人物篩選": "",
+                "景點判斷": "",
             }
         )
     return rows
 
 
-REPORT_FIELDS = ["新順序", "新檔名", "原始檔案", "類型", "可信度", "排序依據", "推定時間", "分組", "行程站點", "手動調整", "人物篩選"]
+REPORT_FIELDS = ["新順序", "新檔名", "原始檔案", "類型", "可信度", "排序依據", "推定時間", "分組", "行程站點", "手動調整", "人物篩選", "景點判斷"]
 
 
 def _rollback(out: str, undo: list[tuple[str, str, str | None]]) -> list[str]:
@@ -323,11 +357,20 @@ def _write_reports(
     create=None,
     face_filter: FaceFilter | None = None,
     excluded: list | None = None,
+    places: PlaceContext | None = None,
 ) -> None:
     def path(name: str) -> str:
         return create(prefix + name) if create else os.path.join(out, prefix + name)
 
-    rows = report_rows(scan, result, targets, face_filter, excluded)
+    rows = report_rows(scan, result, targets, face_filter, excluded, places)
+    place_summary = None
+    if places is not None:
+        from .places import summary as place_summary_mod
+
+        place_summary = place_summary_mod.build(result.placements, places.stops, places.result)
+        names = {p.file.id: targets[p.file.sha256] for p in result.placements}
+        with open(path(PLACES_MD), "w", encoding="utf-8") as fh:
+            fh.write(place_summary_mod.markdown(place_summary, names))
     # utf-8-sig so Excel shows the Chinese headers correctly.
     with open(path(REPORT_CSV), "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=REPORT_FIELDS)
@@ -342,6 +385,7 @@ def _write_reports(
                 "duplicates": [{"file": d.file.id, "duplicate_of": d.duplicate_of} for d in scan.duplicates],
                 "unsupported_files": scan.skipped,
                 "line_chat_reference": chat_summary,
+                "places": place_summary,
                 "files": rows[: len(result.placements)],
                 "face_filter": None
                 if face_filter is None
