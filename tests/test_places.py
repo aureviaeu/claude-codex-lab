@@ -185,6 +185,26 @@ class PipelineTests(PlaceFixture):
         self.assertIn("未知", md)
         self.assertIn("「清水寺」", md)
 
+    def test_group_with_eight_photos_and_a_video(self):
+        """Regression (Codex P1): no video slots left must not divide by zero."""
+        trip = os.path.join(self.tmp.name, "big")
+        base = scene(20)
+        t = datetime(2024, 4, 1, 9)
+        for i in range(8):
+            save_jpeg(marked(variant(base, 100 + i), 0 if i == 0 else None), os.path.join(trip, f"p{i}.jpg"), t.replace(minute=i))
+        save_video_with_marker(os.path.join(trip, "v.mp4"), 1)
+        res = scan(trip)
+        video = next(f for f in res.files if f.kind == "video")
+        video.time = t.replace(minute=3)  # same time slot: one group of 9
+        r = pipeline.analyze(res.files, self.stops, FakeOcr(self.texts), environ={})
+        self.assertEqual(len(r.groups), 1)
+        self.assertEqual(len(r.groups[0].member_ids), 9)
+        self.assertEqual(r.groups[0].stop.name, "清水寺")
+
+    def test_pick_with_no_room(self):
+        self.assertEqual(pipeline._pick([1, 2, 3], 0), [])
+        self.assertEqual(pipeline._pick([1, 2, 3, 4], 2), [1, 3])
+
     def test_works_with_network_blocked(self):
         with no_network():
             r = self.analyze()

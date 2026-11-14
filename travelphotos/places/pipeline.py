@@ -66,6 +66,9 @@ class PlaceResult:
 
 
 def _pick(items: list, limit: int) -> list:
+    """Up to `limit` items spread evenly; none when there is no room."""
+    if limit <= 0:
+        return []
     if len(items) <= limit:
         return items
     step = len(items) / limit
