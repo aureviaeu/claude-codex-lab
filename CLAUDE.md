@@ -3,7 +3,7 @@
 These are the rules for a cloud session. A session runs in one of two modes:
 
 - **One feature (default).** The owner, `aureviaeu`, describes one feature in the session. You implement it, test it, have it reviewed by an independent subagent, and open one pull request to `main` for the owner to accept. Codex is not used.
-- **Continuous development**, only when the owner asks for it in the session. You work through every `ready` issue in order, merge each one into `dev` after review, and finish with one `dev` → `main` pull request. See [Continuous development mode](#continuous-development-mode). Codex reviews each pull request to `dev`.
+- **Continuous development**, only when the owner asks for it in the session. You work through every unfinished issue the owner opened, in order. You write specs and make product decisions yourself, merge each issue into `dev` after review, and finish with one `dev` → `main` pull request. See [Continuous development mode](#continuous-development-mode). Codex reviews each pull request to `dev`.
 
 Every other section applies to both modes unless that section says otherwise.
 
@@ -34,41 +34,61 @@ This is the default mode.
 
 ## Continuous development mode
 
-Use this mode only when the owner asks for it in the session. The owner is not watching, so you do not ask questions in the session; you ask on the issue and move on.
+Use this mode only when the owner asks for it in the session. The owner is not watching. You do not ask questions. You make product decisions yourself, and you stop on an issue only in the cases under [Stopping on an issue](#stopping-on-an-issue).
 
 ### Work list
 
-The work list is every open issue opened by `aureviaeu` and labelled `ready`, taken in ascending issue number. Skip any issue that is also labelled `needs-human`, `blocked`, or `acceptance`. Re-read the list after each issue, so an issue the owner marks `ready` meanwhile is picked up in its place in the order.
+The work list is every open issue opened by `aureviaeu` that is not finished, in ascending issue number. Skip any issue labelled `needs-human`, `blocked`, or `acceptance`. Re-read the list after each issue, so a new issue is picked up in its place in the order.
+
+- An issue labelled `ready` or `in-progress` has a settled spec: implement it. If an open pull request to `dev` for it already exists, continue that one.
+- Any other issue (labelled `proposed`, or with no label): [write the spec](#writing-the-spec) first, then implement it.
+
+### Writing the spec
+
+1. Write a spec with these sections: Goal, Scope / Out of scope, Acceptance criteria (a testable checklist), and Product decisions.
+2. Make the product decisions yourself. For each open product question, pick the simplest option that stays closest to the owner's original words. Under Product decisions, list each decision, the other options, and why you picked this one.
+3. Start an independent subagent to check the spec. Give it only the issue as the owner wrote it, your spec, and this file. It does not see your conversation. Ask it whether the spec matches the owner's intent and stays within the [product boundaries](#product-boundaries), and to list every problem.
+4. Fix what it found. If a problem means the issue hits a case under [Stopping on an issue](#stopping-on-an-issue), stop there.
+5. Comment the spec on the issue, starting with `Spec (continuous mode)`. Do not change the owner's issue text.
+6. Remove `proposed` if present, add `ready`, and implement it.
 
 ### For each issue
 
-1. Read the issue. If the product direction is unclear, follow [Skipping an issue](#skipping-an-issue).
+1. Read the issue and its spec. If a case under [Stopping on an issue](#stopping-on-an-issue) applies, stop there.
 2. Create `claude/issue-<n>-<short-slug>` from the latest `dev`.
 3. Implement the feature, add or adjust tests, and record technical choices as ADRs. Run `scripts/test.sh`; all of it must pass.
-4. Run the [subagent code review](#code-review-by-a-subagent), with the issue as the spec. Fix every P0 and P1, run `scripts/test.sh` again, then push.
-5. Open one pull request from that branch to `dev`. Keep the sections from `.github/pull_request_template.md`, write `Part of #<n>` instead of `Closes #<n>` (the issue closes when `dev` reaches `main`), and list every subagent finding and how you handled it.
+4. Run the [subagent code review](#code-review-by-a-subagent), with the issue and its spec as the spec. Fix every P0 and P1, run `scripts/test.sh` again, then push.
+5. Open one pull request from that branch to `dev`. Keep the sections from `.github/pull_request_template.md`, write `Part of #<n>` instead of `Closes #<n>` (the issue closes when `dev` reaches `main`), link the spec comment, and list every subagent finding and how you handled it.
 6. Wait for CI and Codex, at most 10 minutes after each push. Codex has reviewed the head commit when `GET /pulls/<n>/reviews` has a Codex review whose `commit_id` is the head SHA, or `GET /issues/<n>/comments` has a Codex comment posted after that commit (for example "Didn't find any major issues").
 7. For each Codex P0 or P1 finding: fix it (one finding, one commit, when the fixes are independent), push, and reply in that review thread starting with `[claude-fixed] <what changed> (<sha>)`. Do not resolve the thread yourself; `.github/workflows/resolve-threads.yml` does that. If CI fails, fix it and push. After pushing fixes, comment `@codex review` once on the pull request, then go back to step 6. Never post any other `@codex` command.
-8. If you believe a Codex P0 or P1 is wrong and will not fix it, do not merge. Follow [Skipping an issue](#skipping-an-issue) and explain the disagreement on the issue.
+8. If you believe a Codex P0 or P1 is wrong and will not fix it, do not merge. Stop on the issue as described under [Stopping on an issue](#stopping-on-an-issue), and explain the disagreement.
 9. Merge the pull request into `dev` when all of these are true:
    - CI on the head commit is green.
    - Every Codex P0 and P1 finding has a `[claude-fixed]` reply, and its thread is resolved.
    - Codex has reviewed the head commit, or 10 minutes have passed since the last push without a Codex review. In that case, comment on the pull request that Codex did not review commit `<sha>`, and note it in the `dev` → `main` pull request.
-10. On the issue, remove `ready`, add `acceptance`, and comment a link to the merged pull request.
+10. On the issue, remove `ready` and `in-progress`, add `acceptance`, and comment a link to the merged pull request.
 11. Go to the next issue.
 
-Each round of fixes for a failing CI run or for Codex findings is one attempt. After three attempts on the same issue without reaching step 9, follow [Skipping an issue](#skipping-an-issue) and paste the last error or the open findings.
+Each round of fixes for a failing CI run or for Codex findings is one attempt. After three attempts on the same issue without reaching step 9, the issue has failed three times.
 
-### Skipping an issue
+### Stopping on an issue
 
-When an issue's product direction is unclear, or the issue fails three times:
+In this mode, an unclear product direction is not a reason to stop: decide it as described under [Writing the spec](#writing-the-spec). Stop on an issue only when:
 
-1. Comment on the issue: what is unclear and the options with their tradeoffs, or the last error. Do not pick a product option yourself.
+- it needs a cloud or paid service
+- it needs a secret, credential, or API key
+- it would delete or irreversibly change data (for example the owner's photos, git history, or production state)
+- it needs a security decision (auth, trust boundary, permissions, exposure, crypto)
+- it failed three times
+- you will not fix a Codex P0 or P1 (step 8 above)
+- it needs a change under `.github/` that the issue does not explicitly ask for
+
+To stop on an issue:
+
+1. Comment on the issue with the reason: what is needed and the options with their tradeoffs, or the last error or the open findings.
 2. Add `needs-human`.
 3. Leave any pull request for it open and unmerged, and say so in the comment.
 4. Go to the next issue.
-
-The other cases in [When to stop and ask the owner](#when-to-stop-and-ask-the-owner) (secrets, cloud or paid services, destructive changes, security decisions) are handled the same way in this mode: comment, add `needs-human`, skip. An issue that needs a change under `.github/` is skipped the same way unless the issue explicitly asks for that change.
 
 ### Merging
 
@@ -77,14 +97,15 @@ The other cases in [When to stop and ask the owner](#when-to-stop-and-ask-the-ow
 
 ### When the work list is empty
 
-If `dev` has no commits that `main` lacks and no `dev` → `main` pull request is open (nothing was merged this time), do not open one: say in the session which issues were skipped and why, then stop.
+If `dev` has no commits that `main` lacks and no `dev` → `main` pull request is open (nothing was merged this time), do not open one: say in the session which issues were stopped and why, then stop.
 
 Otherwise open one pull request from `dev` to `main`. If an open one already exists, update its body instead of opening another. The body keeps the sections from `.github/pull_request_template.md` and lists:
 
 - every feature merged into `dev` since `main`: issue number, title, and the `dev` pull request, with `Closes #<n>` for each issue
+- the product decisions you made for each issue, with a link to its spec comment
 - acceptance steps the owner can follow for each feature, without reading the diff
 - commits Codex did not review
-- issues skipped with `needs-human`, and why
+- issues stopped with `needs-human`, and why
 
 Do not merge it. Then stop.
 
@@ -130,7 +151,7 @@ Use the built-in GitHub tools, or REST only (`gh api repos/aureviaeu/claude-code
 
 ## When to stop and ask the owner
 
-Stop and ask in the session. Do not guess.
+Stop and ask in the session. Do not guess. In continuous mode, [Stopping on an issue](#stopping-on-an-issue) replaces this list.
 
 - The product requirement is ambiguous. Give the options and the tradeoff.
 - A secret, credential, or missing permission is needed.
