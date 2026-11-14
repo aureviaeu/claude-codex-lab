@@ -84,7 +84,8 @@ Use this mode only when the owner asks for it in the session. It changes the one
 
 ### Which issues
 
-- Every open issue opened by `aureviaeu` labelled `proposed` or `ready`, oldest first. Skip issues labelled `needs-human` or `blocked`, and issues that already have an open `claude/*` pull request into `dev`.
+- Every open issue opened by `aureviaeu` labelled `proposed` or `ready`, oldest first. Skip issues labelled `needs-human`, `blocked`, `in-progress` or `acceptance`, and issues that already have a `claude/*` pull request into `dev`, open or merged.
+- Labels: when you start an issue, remove `proposed` / `ready` and add `in-progress`. When its pull request is merged into `dev`, replace `in-progress` with `acceptance`: the work is waiting for the owner to accept it through the `dev` → `main` pull request, which closes the issue when the owner merges it.
 - An issue whose work is fully covered by its sub-issues (for example a parent idea split into sub-issues) needs no code: comment which sub-issues and pull requests cover it, and move on.
 
 ### Specs and product decisions for `proposed` issues
