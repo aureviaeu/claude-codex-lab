@@ -2,7 +2,9 @@
 
 These are the rules for one cloud session that builds one feature from start to finish. The owner, `aureviaeu`, describes the feature in the session. You implement it, test it, have it reviewed by an independent subagent, and open one pull request for the owner to accept.
 
-[AGENTS.md](AGENTS.md) describes the roles and Codex's review rules. Where AGENTS.md describes the scheduled, label-driven workflow (one thing per run, `proposed` / `ready` / `in-progress` / `acceptance` labels, the 24-hour Codex wait) or Codex review, it does not apply to a session run under this file. Codex is not used. For a session run under this file, CLAUDE.md takes precedence over AGENTS.md wherever they differ, including branch names, pull request requirements, and how to stop. AGENTS.md still applies to anything this file does not cover.
+A session can instead run in **continuous mode**, when the owner asks for it in the session: you work through every open issue the owner opened, one after another, merge each into `dev`, and finish with one `dev` → `main` pull request. See [Continuous mode](#continuous-mode). Everything else in this file applies to both modes unless that section says otherwise.
+
+[AGENTS.md](AGENTS.md) describes the roles and Codex's review rules. Where AGENTS.md describes the scheduled, label-driven workflow (one thing per run, `proposed` / `ready` / `in-progress` / `acceptance` labels, the 24-hour Codex wait) or Codex review, it does not apply to a session run under this file. Codex is not used, except in continuous mode (see below). For a session run under this file, CLAUDE.md takes precedence over AGENTS.md wherever they differ, including branch names, pull request requirements, and how to stop. AGENTS.md still applies to anything this file does not cover.
 
 ## Roles
 
@@ -76,8 +78,43 @@ Stop and ask in the session. Do not guess.
 - The same CI failure persists after three attempts.
 - You disagree with a P0 from the review.
 
+## Continuous mode
+
+Use this mode only when the owner asks for it in the session. It changes the one-feature workflow as follows.
+
+### Which issues
+
+- Every open issue opened by `aureviaeu` labelled `proposed` or `ready`, oldest first. Skip issues labelled `needs-human` or `blocked`, and issues that already have an open `claude/*` pull request into `dev`.
+- An issue whose work is fully covered by its sub-issues (for example a parent idea split into sub-issues) needs no code: comment which sub-issues and pull requests cover it, and move on.
+
+### Specs and product decisions for `proposed` issues
+
+- Write the spec yourself: goal, scope / out of scope, testable acceptance criteria, and a "Product decisions" list. Make the product decisions the owner would otherwise answer, choosing the option that is local, free, reversible, and smallest in scope. The product boundaries above still apply.
+- Before coding, give the spec (and only the spec, the issue text, and this file) to an independent subagent. Ask it for problems that would make the spec untestable, contradict the owner's words, or break a product boundary. Fix what it finds.
+- Put the spec in the issue body, keep the owner's original text quoted at the bottom, and comment `Spec drafted (continuous mode)` with the product decisions. Then implement it as if it were `ready`.
+
+### Branches and merging
+
+- `dev` is the integration branch. Create `claude/issue-<n>-<slug>` from the latest `dev` for each issue, and open its pull request against `dev` with the usual sections and `Refs #<n>` (not `Closes`, so the issue stays open until `main` gets it).
+- Before merging a pull request into `dev`, all of these must be true:
+  1. `scripts/test.sh` passes on the branch after rebasing or merging the latest `dev`.
+  2. The subagent code review ran and every P0 and P1 finding is fixed (or answered as factually wrong in the pull request body).
+  3. Codex reviewed the head commit (a Codex review on that commit, or a Codex "no major issues" comment after it), and every Codex P0 and P1 is fixed and answered with `[claude-fixed]`, or answered with `[claude-declined]` and the reason. If Codex has not reviewed the head commit 60 minutes after it was pushed, merge anyway and list that commit in the final `dev` → `main` pull request for the owner to review by hand.
+  4. Any `test` CI run on the pull request is green.
+- Then merge the pull request into `dev` with a merge commit, and continue with the next issue.
+
+### Stopping on one issue
+
+The cases in [When to stop and ask the owner](#when-to-stop-and-ask-the-owner) still apply, except that an ambiguous product requirement is yours to decide. When another case applies, do not stop the whole run: add `needs-human` to the issue, comment what decision or input is needed, and move on to the next issue.
+
+### Finishing
+
+- When no issue is left to work on, open (or update) one pull request from `dev` to `main`. List every feature with its issue number, every product decision you made, every issue labelled `needs-human` and why, any commit Codex did not review, and acceptance steps for each feature. Add `Closes #<n>` for each finished issue.
+- Wait for the `test` CI run on that pull request to be green, fixing failures as in Testing. Then stop. The owner merges into `main`.
+- If the session reaches the round limit the owner set, stop and report which issues are done, in progress, or labelled `needs-human`.
+
 ## Never
 
-- Merge a pull request.
+- Merge a pull request, except a pull request into `dev` in continuous mode.
 - Push to `main`.
 - Change branch protection or any other repository setting.
