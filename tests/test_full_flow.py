@@ -60,6 +60,13 @@ FAMILY_IN_ORDER = [
     "IMG_20240402_100000.jpg",
 ]
 
+# places.md rows for the full flow: (place, photos, videos, representative).
+FAMILY_PLACES = [
+    ("清水寺", 1, 0, "0001_IMG_20240401_090000.jpg"),
+    ("伏見稻荷大社", 1, 1, "0002_IMG_20240401_130200.jpg"),
+    ("金閣寺", 1, 0, "0004_IMG_20240402_100000.jpg"),
+]
+
 
 def build_trip(folder: str) -> None:
     for name, people, marker in PHOTOS:
@@ -226,14 +233,7 @@ class FullFlowTests(FlowBase):
         out, data = self.output("out")
         self.assertEqual(data["applied"]["face_excluded"], 3)
         self.expect_files(out, FAMILY_IN_ORDER)
-        self.expect_places(
-            self.places_md(out),
-            [
-                ("清水寺", 1, 0, "0001_IMG_20240401_090000.jpg"),
-                ("伏見稻荷大社", 1, 1, "0002_IMG_20240401_130200.jpg"),
-                ("金閣寺", 1, 0, "0004_IMG_20240402_100000.jpg"),
-            ],
-        )
+        self.expect_places(self.places_md(out), FAMILY_PLACES)
         self.expect_originals_untouched()
 
     def test_full_flow_keeps_family_in_order_with_a_place_summary(self):
@@ -439,7 +439,9 @@ class BrowserFlowTests(FlowBase):
     def test_full_flow_in_the_page(self):
         out = self.click_through("full", "browser-full")
         self.expect_files(out, FAMILY_IN_ORDER)
-        self.assertIn("金閣寺", self.places_md(out))
+        self.expect_places(self.places_md(out), FAMILY_PLACES)
+        rows = {r["原始檔案"]: r for r in self.report_rows(out)}
+        self.assertTrue(rows["IMG_20240402_100000.jpg"]["景點判斷"].startswith("金閣寺"))
         self.expect_originals_untouched()
 
     def test_only_people_in_the_page(self):
