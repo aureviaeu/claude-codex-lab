@@ -356,7 +356,7 @@ class RealModelsOfflineTests(unittest.TestCase):
 
 _BROWSER_SCRIPT = textwrap.dedent(
     r"""
-    const { chromium } = require("playwright");
+    const { chromium } = require(process.env.TRAVELPHOTOS_PLAYWRIGHT);
     const [url, trip, itinerary, refMe, refMom, out, mode] = process.argv.slice(2);
     (async () => {
       const browser = await chromium.launch();
@@ -404,14 +404,26 @@ _BROWSER_SCRIPT = textwrap.dedent(
 )
 
 
-def _browser_available() -> bool:
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _playwright_entry() -> str | None:
+    """Absolute path of Playwright's entry point as node resolves it from the
+    repository, so the generated script (in a temp folder) loads the same one."""
     if shutil.which("node") is None:
-        return False
+        return None
     try:
-        done = subprocess.run(["node", "-e", "require('playwright')"], capture_output=True, timeout=30)
+        done = subprocess.run(
+            ["node", "-e", "process.stdout.write(require.resolve('playwright'))"], capture_output=True, text=True, timeout=30, cwd=_REPO
+        )
     except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0
+        return None
+    path = done.stdout.strip()
+    return path if done.returncode == 0 and os.path.isabs(path) and os.path.exists(path) else None
+
+
+def _browser_available() -> bool:
+    return _playwright_entry() is not None
 
 
 @unittest.skipUnless(_browser_available(), "no browser automation (node + playwright) on this computer; check by hand")
@@ -430,6 +442,8 @@ class BrowserFlowTests(FlowBase):
             capture_output=True,
             text=True,
             timeout=180,
+            cwd=_REPO,
+            env={**os.environ, "TRAVELPHOTOS_PLAYWRIGHT": _playwright_entry()},
         )
         self.assertEqual(done.returncode, 0, done.stderr[-2000:])
         result = json.loads(done.stdout.strip().splitlines()[-1])
