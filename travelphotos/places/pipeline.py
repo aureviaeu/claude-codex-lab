@@ -179,11 +179,19 @@ def _resolve_repeats(ordered: list[tuple[GroupPlace, datetime | None]], stops: l
     that same stop moves on to a later occurrence, so two visits on
     different days are never merged even when nothing between them was
     recognised.
+
+    A group with no time at all cannot be placed on a day, so when the
+    occurrence it would take is already used by another group, it takes the
+    next unused one, or else the earliest unused one (dated groups come
+    first and may already hold the later visit), so a hotel on two nights
+    becomes two visits; once every occurrence is used, it stays on the
+    last one.
     """
     dates = [t.date() for _gp, t in ordered if t is not None]
     first_day = min(dates) if dates else None
     last = 0
     seen: dict[int, object] = {}  # stop index -> date of the last group placed there
+    used: set[int] = set()  # stop indexes already given to a group
     for gp, t in ordered:
         if gp.stop is None:
             continue
@@ -203,7 +211,16 @@ def _resolve_repeats(ordered: list[tuple[GroupPlace, datetime | None]], stops: l
                 after = [s for s in same if s.index > chosen.index]
                 if after:
                     chosen = after[0]
+            if t is None and chosen.index in used:
+                unused = [s for s in same if s.index > chosen.index and s.index not in used] or [
+                    s for s in same if s.index not in used
+                ]
+                if unused:
+                    chosen = unused[0]
+                else:
+                    chosen = [s for s in same if s.index >= chosen.index][-1]
         gp.stop = chosen
+        used.add(chosen.index)
         last = chosen.index
         if t is not None:
             seen[chosen.index] = t.date()
