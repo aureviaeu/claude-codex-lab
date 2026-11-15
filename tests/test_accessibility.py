@@ -62,6 +62,15 @@ class ContrastTests(unittest.TestCase):
                     with self.subTest(theme=name, fg=fg, bg=bg):
                         self.assertGreaterEqual(contrast(t[fg], t[bg]), 4.5)
 
+    def test_thumbnail_placeholder_text(self):
+        """Review finding: 影片 / 無法預覽 sit on --line, not on a card."""
+        body = " ".join(rules(r"^\s*\.thumb\s*$"))
+        colour = re.search(r"(?<!-)color:\s*var\(--([a-z-]+)\)", body).group(1)
+        bg = re.search(r"background:\s*var\(--([a-z-]+)\)", body).group(1)
+        for name, t in themes().items():
+            with self.subTest(theme=name):
+                self.assertGreaterEqual(contrast(t[colour], t[bg]), 4.5)
+
     def test_primary_button_text(self):
         t = themes()
         self.assertEqual(t["light"]["on-accent"], "#fff", "light mode keeps white text")

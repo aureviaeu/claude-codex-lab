@@ -26,7 +26,7 @@ button:disabled { opacity: .5; cursor: wait; }
 .item.dragging { opacity: .4; }
 .item.over { outline: 2px dashed var(--accent); }
 .item.manual { border-color: var(--accent); }
-.thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; background: var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; background: var(--line); display: flex; align-items: center; justify-content: center; color: var(--text); }
 .pos { font-weight: 700; }
 .name { word-break: break-all; }
 .badge { display: inline-block; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; font-size: 12px; }
