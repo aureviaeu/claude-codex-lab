@@ -6,7 +6,9 @@ import hmac
 import json
 import os
 import secrets
+import sys
 import threading
+import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -220,6 +222,9 @@ class AppState:
         }
 
 
+UNEXPECTED = "發生未預期的錯誤（{name}）。請重新整理頁面再試一次；如果一直發生，請關閉工具後用啟動檔重新啟動，並把啟動檔視窗裡的錯誤訊息回報。"
+
+
 def make_handler(state: AppState, token: str):
     class Handler(BaseHTTPRequestHandler):
         server_version = "travelphotos"
@@ -265,8 +270,29 @@ def make_handler(state: AppState, token: str):
                 return None
             return {"path": parsed.path, "query": query}
 
+        def _unexpected(self, exc: BaseException) -> None:
+            """Any error a route did not expect: details to the terminal, a
+            readable message to the page, and the server keeps running (#26)."""
+            traceback.print_exception(exc, file=sys.stderr)
+            try:
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": UNEXPECTED.format(name=type(exc).__name__)})
+            except OSError:
+                pass  # the browser went away or the response had started
+
         # --- routes --------------------------------------------------
         def do_GET(self):
+            try:
+                self._get()
+            except Exception as exc:  # noqa: BLE001 - last line of defence
+                self._unexpected(exc)
+
+        def do_POST(self):
+            try:
+                self._post()
+            except Exception as exc:  # noqa: BLE001 - last line of defence
+                self._unexpected(exc)
+
+        def _get(self):
             req = self._guard()
             if req is None:
                 return
@@ -314,7 +340,7 @@ def make_handler(state: AppState, token: str):
             else:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "找不到"})
 
-        def do_POST(self):
+        def _post(self):
             req = self._guard()
             if req is None:
                 return

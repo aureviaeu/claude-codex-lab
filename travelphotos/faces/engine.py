@@ -35,6 +35,10 @@ MODELS_MISSING = (
     "（只需要一次，約 39 MB，免費，需要網路；之後完全離線使用）。"
     "也可以在專案資料夾執行：python launcher/download_models.py"
 )
+MODELS_BROKEN = (
+    "人臉模型檔無法載入，可能已損壞。請關閉這個工具，再用啟動檔（start.command／start.bat／start.sh）重新啟動："
+    "啟動檔會檢查模型檔的校驗碼，損壞的會自動重新下載（需要網路）。"
+)
 LIBS_MISSING = "缺少 opencv-python-headless 或 numpy 套件。請重新執行啟動檔，或執行 pip install -r requirements.txt。"
 
 
@@ -48,10 +52,13 @@ class OpenCVEngine:
         if paths.missing_models(model_directory):
             raise FaceUnavailable(MODELS_MISSING)
         self._np = np
-        self._detector = cv2.FaceDetectorYN.create(
-            os.path.join(model_directory, paths.DETECTOR.name), "", (320, 320), DETECT_SCORE, 0.3, 5000
-        )
-        self._recognizer = cv2.FaceRecognizerSF.create(os.path.join(model_directory, paths.RECOGNIZER.name), "")
+        try:
+            self._detector = cv2.FaceDetectorYN.create(
+                os.path.join(model_directory, paths.DETECTOR.name), "", (320, 320), DETECT_SCORE, 0.3, 5000
+            )
+            self._recognizer = cv2.FaceRecognizerSF.create(os.path.join(model_directory, paths.RECOGNIZER.name), "")
+        except (cv2.error, ValueError) as exc:  # the file is there but cannot be parsed (#26)
+            raise FaceUnavailable(MODELS_BROKEN) from exc
 
     def detect(self, rgb) -> list[Face]:
         np = self._np
