@@ -22,7 +22,7 @@ from travelphotos import server as srv
 from travelphotos.itinerary import parse_itinerary
 from travelphotos.ordering import HIGH, LOW, MEDIUM
 from travelphotos.places import cloud, matching, pipeline, summary
-from travelphotos.places.ocr import OcrUnavailable, OpenCVOcr
+from travelphotos.places.ocr import OcrUnavailable, OnnxOcr
 from travelphotos.scan import scan
 
 # The fake OCR engine reads a coloured marker in the top-left corner.
@@ -527,7 +527,7 @@ class PlaceApiTests(PlaceFixture):
 class OcrEngineTests(unittest.TestCase):
     def test_missing_models_explain_how_to_download(self):
         with tempfile.TemporaryDirectory() as d, self.assertRaises(OcrUnavailable) as cm:
-            OpenCVOcr(d)
+            OnnxOcr(d)
         self.assertIn("download_models.py", str(cm.exception))
 
 

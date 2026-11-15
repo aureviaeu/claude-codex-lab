@@ -156,8 +156,14 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(os.listdir(self.tmp.name), [])
 
     def test_real_models_are_pinned(self):
-        self.assertEqual(len(download_models.all_models()), 4)
-        for m in download_models.all_models():
+        self.assertEqual(len(download_models.all_models()), 5)
+        wheel = place_models.WHEEL
+        self.assertRegex(wheel.url, r"^https://files\.pythonhosted\.org/packages/.+/rapidocr_onnxruntime-1\.2\.3-py3-none-any\.whl$")
+        self.assertRegex(wheel.sha256, r"^[0-9a-f]{64}$")
+        for m in place_models.MODELS:
+            self.assertRegex(m.sha256, r"^[0-9a-f]{64}$")
+            self.assertTrue(m.member.startswith("rapidocr_onnxruntime/models/") and m.member.endswith(m.name))
+        for m in paths.MODELS:
             self.assertRegex(m.url, r"^https://media\.githubusercontent\.com/media/opencv/opencv_zoo/[0-9a-f]{40}/")
             self.assertRegex(m.sha256, r"^[0-9a-f]{64}$")
 
