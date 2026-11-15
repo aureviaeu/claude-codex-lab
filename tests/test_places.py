@@ -278,6 +278,20 @@ class RepeatWithoutDatesTests(unittest.TestCase):
         r, s, _res, _stops = self.visits("第1天：京都飯店\n第2天：京都飯店\n")
         self.assertEqual(sorted(g.stop.index for g in r.groups), [1, 2, 2])
 
+    def test_mixed_dated_and_undated_photos_use_the_free_visit(self):
+        """Review finding: a dated day-2 hotel group must not push the undated
+        one onto the same visit when the day-1 visit is still free."""
+        from datetime import datetime
+
+        stops = parse_itinerary("第1天：清水寺 → 京都飯店\n第2天：金閣寺 → 京都飯店\n")
+        by = {s.index: s for s in stops}
+        groups = [pipeline.GroupPlace(key=k, member_ids=[k]) for k in "abcd"]
+        for g, idx in zip(groups, (1, 3, 2, 2)):
+            g.stop = by[idx]
+        times = [datetime(2024, 4, 1, 9), datetime(2024, 4, 2, 10), datetime(2024, 4, 2, 21), None]
+        pipeline._resolve_repeats(list(zip(groups, times)), stops)
+        self.assertEqual([g.stop.index for g in groups], [1, 3, 4, 2])
+
     def test_a_single_visit_is_unchanged(self):
         r, s, _res, _stops = self.visits("清水寺\n京都飯店\n金閣寺\n")
         self.assertEqual([g.stop.index for g in r.groups], [2, 2])
