@@ -12,18 +12,22 @@ class Stop:
     index: int  # 1-based order in the whole trip
     day: int  # 1-based day number
     name: str
-    # Extra spellings used only for matching sign text (#22), written after
-    # the name in brackets: 嵐山（Arashiyama）. Never shown as the name.
+    # Extra Latin spellings used only for matching sign text (#22), written
+    # after the name: 嵐山（別名 Arashiyama）. Never shown as the name.
     aliases: list[str] = field(default_factory=list)
 
 
-# Only a bracketed part made of Latin letters, digits, spaces and a few
-# separators is an alias; anything else (清水寺 (早上)) stays part of the name.
-_ALIAS = re.compile(r"^(?P<name>.+?)\s*[（(](?P<alias>[A-Za-z][A-Za-z0-9 .'\-;；,，]*)[）)]\s*$")
+# An alias is written in brackets after the name with an explicit marker,
+# 別名 or aka: 嵐山（別名 Arashiyama）, 雷門 (aka Kaminarimon). Any other
+# bracket (清水寺 (morning), 京都飯店（午餐）) stays part of the name.
+_ALIAS = re.compile(
+    r"^(?P<name>.+?)\s*[（(]\s*(?:別名|aka)\s*[:：]?\s*(?P<alias>[A-Za-z][A-Za-z0-9 .'\-;；,，]*?)\s*[）)]\s*$",
+    re.IGNORECASE,
+)
 
 
 def split_aliases(text: str) -> tuple[str, list[str]]:
-    """'嵐山（Arashiyama）' -> ('嵐山', ['Arashiyama']); other text unchanged."""
+    """'嵐山（別名 Arashiyama）' -> ('嵐山', ['Arashiyama']); other text unchanged."""
     match = _ALIAS.match(text)
     if not match:
         return text, []

@@ -74,14 +74,25 @@ class CoreNameTests(unittest.TestCase):
 
 
 class AliasTests(unittest.TestCase):
-    def test_bracketed_latin_is_an_alias(self):
-        self.assertEqual(split_aliases("嵐山（Arashiyama）"), ("嵐山", ["Arashiyama"]))
-        self.assertEqual(split_aliases("雷門 (Kaminarimon; Kaminari-mon)"), ("雷門", ["Kaminarimon", "Kaminari-mon"]))
-        stops = parse_itinerary("第1天：嵐山（Arashiyama） → 清水寺\n")
+    def test_marked_brackets_are_aliases(self):
+        self.assertEqual(split_aliases("嵐山（別名 Arashiyama）"), ("嵐山", ["Arashiyama"]))
+        self.assertEqual(split_aliases("嵐山（別名：Arashiyama）"), ("嵐山", ["Arashiyama"]))
+        self.assertEqual(split_aliases("雷門 (aka Kaminarimon; Kaminari-mon)"), ("雷門", ["Kaminarimon", "Kaminari-mon"]))
+        self.assertEqual(split_aliases("雷門 (AKA: Kaminarimon)"), ("雷門", ["Kaminarimon"]))
+        stops = parse_itinerary("第1天：嵐山（別名 Arashiyama） → 清水寺\n")
         self.assertEqual([(s.name, s.aliases) for s in stops], [("嵐山", ["Arashiyama"]), ("清水寺", [])])
 
     def test_other_brackets_stay_part_of_the_name(self):
-        for text in ("京都飯店（午餐）", "清水寺 (早上)", "金閣寺（鹿苑寺）", "Day trip (2)"):
+        for text in (
+            "京都飯店（午餐）",
+            "清水寺 (早上)",
+            "金閣寺（鹿苑寺）",
+            "Day trip (2)",
+            "嵐山（Arashiyama）",
+            "清水寺 (morning)",
+            "京都飯店 (check-in)",
+            "Hotel Granvia (Kyoto)",
+        ):
             with self.subTest(text=text):
                 self.assertEqual(split_aliases(text), (text, []))
         stops = parse_itinerary("京都飯店（午餐）\n清水寺 (早上)\n")
@@ -92,8 +103,15 @@ class AliasTests(unittest.TestCase):
         self.assertGreaterEqual(score("嵐山", "Hankyu Arashlyama Station", "Arashiyama"), matching.MIN_SCORE)
         self.assertEqual(score("嵐山", "Hankyu Arashlyama Station"), 0.0, "no alias, no match")
 
+    def test_english_notes_do_not_match_signs(self):
+        """Review finding: plain English notes must not become aliases."""
+        stops = parse_itinerary("清水寺 (morning)\n京都飯店 (check-in)\nHotel Granvia (Kyoto)\n")
+        for line in ("Good Morning", "Check-in", "Welcome to Kyoto", "Kyoto Tower"):
+            with self.subTest(line=line):
+                self.assertEqual(matching.best_matches([("a.jpg", line)], stops), [])
+
     def test_alias_is_used_in_best_matches_but_name_is_reported(self):
-        stops = parse_itinerary("嵐山（Arashiyama）\n富士山\n")
+        stops = parse_itinerary("嵐山（別名 Arashiyama）\n富士山\n")
         found = matching.best_matches([("a.jpg", "Arashiyama")], stops)
         self.assertEqual([m.stop.name for m in found], ["嵐山"])
 
@@ -138,7 +156,7 @@ class BenchmarkTests(unittest.TestCase):
             fh.write("p2.png,嵐山\np4.png,\n")
         labels = benchmark.load_labels(csv_path)
         self.assertEqual(labels, [{"file": "p2.png", "expected": "嵐山"}, {"file": "p4.png", "expected": None}])
-        result = benchmark.run(self.dir, labels, "嵐山（Arashiyama）\n", self.engine)
+        result = benchmark.run(self.dir, labels, "嵐山（別名 Arashiyama）\n", self.engine)
         self.assertEqual(result["hits"], 1)
 
     def test_basic_rules_reproduce_the_old_numbers(self):
