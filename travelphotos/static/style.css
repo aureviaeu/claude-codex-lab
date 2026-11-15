@@ -73,5 +73,7 @@ input[type=number] { width: 6em; padding: 6px; font: inherit; color: var(--text)
    keeps full contrast, and a dashed border marks it besides the colour. */
 .item.face-out { border: 2px dashed var(--low); }
 .item.face-out img.thumb { opacity: .45; }
+/* Moved by hand and left out: keep the moved-by-hand colour on the dashed border. */
+.item.manual.face-out { border-color: var(--accent); }
 button.danger { border-color: var(--low); color: var(--low); }
 .place-thumb { display: block; max-width: 160px; max-height: 120px; margin: 4px 0 8px; border-radius: 4px; }

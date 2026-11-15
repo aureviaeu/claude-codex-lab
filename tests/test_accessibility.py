@@ -93,6 +93,14 @@ class ContrastTests(unittest.TestCase):
                 self.assertGreaterEqual(contrast(t["low"], t["bg"]), 3.0)
                 self.assertGreaterEqual(contrast(t["low"], t["card"]), 3.0)
 
+    def test_moved_and_left_out_photos_keep_the_moved_colour(self):
+        """Review finding: the face-out border must not hide the manual one."""
+        body = " ".join(rules(r"\.item\.manual\.face-out\s*$"))
+        self.assertRegex(body, r"border-color:\s*var\(--accent\)")
+        for name, t in themes().items():
+            with self.subTest(theme=name):
+                self.assertGreaterEqual(contrast(t["accent"], t["bg"]), 3.0)
+
     def test_left_out_photos_also_say_so_in_words(self):
         with open(os.path.join(os.path.dirname(CSS), "app.js"), encoding="utf-8") as fh:
             js = fh.read()
