@@ -103,6 +103,12 @@ class AliasTests(unittest.TestCase):
         self.assertGreaterEqual(score("嵐山", "Hankyu Arashlyama Station", "Arashiyama"), matching.MIN_SCORE)
         self.assertEqual(score("嵐山", "Hankyu Arashlyama Station"), 0.0, "no alias, no match")
 
+    def test_alias_matches_inside_run_together_latin(self):
+        self.assertGreaterEqual(score("嵐山", "HankyuArashlyama Statlon", "Arashiyama"), matching.MIN_SCORE)
+        self.assertEqual(score("嵐山", "HankyuArashlyama Statlon"), 0.0, "only aliases, not stop names")
+        self.assertEqual(score("奈良公園", "NaritaExpress", "Nara"), 0.0, "short aliases stay whole-word")
+        self.assertEqual(score("嵐山", "HankyuArastaStation", "Arashiyama"), 0.0, "two letters off is not a match")
+
     def test_english_notes_do_not_match_signs(self):
         """Review finding: plain English notes must not become aliases."""
         stops = parse_itinerary("清水寺 (morning)\n京都飯店 (check-in)\nHotel Granvia (Kyoto)\n")

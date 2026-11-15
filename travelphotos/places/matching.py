@@ -97,7 +97,31 @@ def stop_score(stop: Stop, text: str, rules: str = "full") -> float:
         return name_score(stop.name, text, variants=False)
     best = max(name_score(stop.name, text), core_score(stop.name, text))
     for alias in getattr(stop, "aliases", None) or []:
-        best = max(best, name_score(alias, text))
+        best = max(best, name_score(alias, text), joined_score(alias, text))
+    return best
+
+
+MIN_JOINED_LEN = 6
+
+
+def joined_score(alias: str, text: str) -> float:
+    """An owner-written Latin alias inside run-together sign text.
+
+    Small signs are often read without spaces (HankyuArashlyama). For aliases
+    of at least MIN_JOINED_LEN letters, a window of the alias's length in
+    the text's letters may differ in one letter. Only aliases use this:
+    they are chosen by the owner, while stop names may be short or common.
+    """
+    a = "".join(_words(alias))
+    if len(a) < MIN_JOINED_LEN or not a.isascii():
+        return 0.0
+    t = "".join(_words(text))
+    best = 0.0
+    for start in range(len(t) - len(a) + 1):
+        window = t[start : start + len(a)]
+        shared = sum(b.size for b in SequenceMatcher(None, a, window).get_matching_blocks())
+        if shared >= len(a) - 1:
+            best = max(best, shared / len(a))
     return best
 
 
