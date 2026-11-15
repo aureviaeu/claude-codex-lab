@@ -6,3 +6,6 @@ numpy>=1.24,<3
 # Places (#7): OCR reads simplified Chinese; this converts the itinerary's
 # traditional characters so they can be compared. Pure Python, no network.
 opencc-python-reimplemented>=0.1.7,<0.2
+# Places (#22): runs the PP-OCRv3 recognition model, which OpenCV < 5 cannot
+# load. Free (MIT), local, no network.
+onnxruntime>=1.17,<2

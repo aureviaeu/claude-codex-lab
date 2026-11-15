@@ -16,6 +16,7 @@ import os
 import sys
 import tempfile
 import urllib.request
+import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -28,8 +29,85 @@ TIMEOUT = 60
 
 
 def all_models() -> tuple:
-    """Face models first (small, needed by #6), then the OCR models (#7)."""
+    """Face models first (small, needed by #6), then the OCR models (#22)."""
     return tuple(paths.MODELS) + tuple(place_models.MODELS)
+
+
+def _download(url: str, sha256: str, folder: str, opener) -> str:
+    """Download to a temp file in folder and check its SHA-256. Returns the path."""
+    fd, tmp = tempfile.mkstemp(prefix=".download-", dir=folder)
+    try:
+        with os.fdopen(fd, "wb") as out, opener(url, timeout=TIMEOUT) as resp:
+            for chunk in iter(lambda: resp.read(1024 * 1024), b""):
+                out.write(chunk)
+        got = sha256_of(tmp)
+        if got != sha256:
+            raise OSError(f"{os.path.basename(url)} 檢查碼不符（{got}），已丟棄。")
+        return tmp
+    except BaseException:
+        _remove(tmp)
+        raise
+
+
+def _remove(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _extract(wheel_path: str, model, target: str) -> None:
+    """Copy one exactly named member out of the wheel, checked by SHA-256."""
+    folder = os.path.dirname(target)
+    with zipfile.ZipFile(wheel_path) as zf:
+        try:
+            info = zf.getinfo(model.member)
+        except KeyError as exc:
+            raise OSError(f"套件裡找不到 {model.member}。") from exc
+        if info.file_size != model.size:
+            raise OSError(f"{model.name} 大小不符，已丟棄。")
+        fd, tmp = tempfile.mkstemp(prefix=".extract-", dir=folder)
+        try:
+            digest = hashlib.sha256()
+            with os.fdopen(fd, "wb") as out, zf.open(info) as src:
+                for chunk in iter(lambda: src.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                    out.write(chunk)
+            if digest.hexdigest() != model.sha256:
+                raise OSError(f"{model.name} 檢查碼不符（{digest.hexdigest()}），已丟棄。")
+            os.replace(tmp, target)
+        except BaseException:
+            _remove(tmp)
+            raise
+
+
+def ensure_ocr_models(directory: str, log=print, opener=urllib.request.urlopen) -> bool:
+    """Fetch the pinned wheel once and take the OCR model files out of it (#22)."""
+    todo = []
+    for model in place_models.MODELS:
+        target = os.path.join(directory, model.name)
+        if not (os.path.isfile(target) and sha256_of(target) == model.sha256):
+            todo.append((model, target))
+    if not todo:
+        return True
+    wheel = place_models.WHEEL
+    log(f"正在下載文字辨識模型（{wheel.size / 1_000_000:.1f} MB，只需要一次）…")
+    try:
+        tmp = _download(wheel.url, wheel.sha256, directory, opener)
+    except (OSError, ValueError) as exc:
+        log(f"下載文字辨識模型失敗：{exc}")
+        return False
+    ok = True
+    try:
+        for model, target in todo:
+            try:
+                _extract(tmp, model, target)
+            except (OSError, ValueError, zipfile.BadZipFile) as exc:
+                log(f"取出 {model.name} 失敗：{exc}")
+                ok = False
+    finally:
+        _remove(tmp)
+    return ok
 
 
 def sha256_of(path: str) -> str:
@@ -64,7 +142,7 @@ def ensure_models(directory: str | None = None, log=print, opener=urllib.request
     directory = directory or paths.model_dir()
     os.makedirs(directory, exist_ok=True)
     ok = True
-    for model in all_models():
+    for model in paths.MODELS:
         target = os.path.join(directory, model.name)
         if os.path.isfile(target) and sha256_of(target) == model.sha256:
             continue
@@ -74,7 +152,7 @@ def ensure_models(directory: str | None = None, log=print, opener=urllib.request
         except (OSError, ValueError) as exc:
             log(f"下載 {model.name} 失敗：{exc}")
             ok = False
-    return ok
+    return ensure_ocr_models(directory, log, opener) and ok
 
 
 def main(argv: list[str] | None = None) -> int:
