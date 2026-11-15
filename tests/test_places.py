@@ -239,6 +239,51 @@ class PipelineTests(PlaceFixture):
         self.assertEqual(set(order[-2:]), {"g1.jpg", "h1.jpg"}, "unknown groups go last")
 
 
+class RepeatWithoutDatesTests(unittest.TestCase):
+    """Owner's P1 on #21: no capture times, same place on two days."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.inp = os.path.join(self.tmp.name, "in")
+        # Two unrelated pictures, no EXIF, no time in the file name.
+        save_jpeg(marked(scene(31), 2), os.path.join(self.inp, "hotel_a.jpg"))
+        save_jpeg(marked(scene(32), 2), os.path.join(self.inp, "hotel_b.jpg"))
+        self.texts = {2: ["京都饭店"]}
+        self.scan = scan(self.inp)
+        self.assertTrue(all(f.time is None for f in self.scan.files))
+
+    def visits(self, itinerary):
+        stops = parse_itinerary(itinerary)
+        r = pipeline.analyze(self.scan.files, stops, FakeOcr(self.texts), environ={})
+        res = ordering.order(self.scan.files, stops, r.assignments())
+        return r, summary.build(res.placements, stops, r), res, stops
+
+    def test_two_days_same_hotel_are_listed_twice(self):
+        r, s, res, stops = self.visits("第1天：京都飯店\n第2天：京都飯店\n")
+        self.assertEqual(sorted(g.stop.index for g in r.groups), [1, 2])
+        self.assertEqual([(v["stop"], v["photos"]) for v in s["visits"]], [(1, 1), (2, 1)])
+        md = summary.markdown(s)
+        self.assertEqual(md.count("## 1. 京都飯店") + md.count("## 2. 京都飯店"), 2)
+
+    def test_no_dates_and_no_stop_in_between(self):
+        r, s, _res, _stops = self.visits("第1天：清水寺 → 京都飯店\n第2天：金閣寺 → 京都飯店\n")
+        self.assertEqual(sorted(g.stop.index for g in r.groups), [2, 4])
+        self.assertEqual([v["stop"] for v in s["visits"]], [2, 4])
+        self.assertEqual([m["name"] for m in s["missed_stops"]], ["清水寺", "金閣寺"])
+
+    def test_more_groups_than_visits_stay_on_the_last_visit(self):
+        save_jpeg(marked(scene(33), 2), os.path.join(self.inp, "hotel_c.jpg"))
+        self.scan = scan(self.inp)
+        r, s, _res, _stops = self.visits("第1天：京都飯店\n第2天：京都飯店\n")
+        self.assertEqual(sorted(g.stop.index for g in r.groups), [1, 2, 2])
+
+    def test_a_single_visit_is_unchanged(self):
+        r, s, _res, _stops = self.visits("清水寺\n京都飯店\n金閣寺\n")
+        self.assertEqual([g.stop.index for g in r.groups], [2, 2])
+        self.assertEqual(len(s["visits"]), 1)
+
+
 class SummaryTests(PlaceFixture):
     def test_summary_lists_visits_in_order_with_counts_and_representative(self):
         r = self.analyze()
