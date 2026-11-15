@@ -63,9 +63,19 @@ class OnnxOcr:
             raise OcrUnavailable(MODELS_MISSING)
         self._cv, self._np = cv2, np
         # A model that is present but cannot be parsed (damaged file) gives a
-        # clear message (#26). onnxruntime's load errors subclass RuntimeError;
-        # OSError and MemoryError are not caught and reach the server's
-        # generic handler instead of being called "damaged".
+        # clear message (#26). onnxruntime's load errors derive from
+        # Exception, not RuntimeError, so they are listed by name. OSError and
+        # MemoryError are not caught and reach the server's generic handler
+        # instead of being called "damaged".
+        parse_errors: tuple = (cv2.error, ValueError)
+        try:
+            from onnxruntime.capi import onnxruntime_pybind11_state as ort_errors
+
+            parse_errors += tuple(
+                getattr(ort_errors, n) for n in ("InvalidProtobuf", "InvalidGraph", "Fail", "InvalidArgument") if hasattr(ort_errors, n)
+            )
+        except ImportError:  # pragma: no cover - layout of other onnxruntime builds
+            parse_errors += (RuntimeError,)
         try:
             self._det = cv2.dnn.readNet(os.path.join(directory, TEXT_DETECTOR.name))
             opts = ort.SessionOptions()
@@ -74,7 +84,7 @@ class OnnxOcr:
             self._rec = ort.InferenceSession(os.path.join(directory, TEXT_RECOGNIZER.name), opts, providers=providers)
             self._cls = ort.InferenceSession(os.path.join(directory, TEXT_DIRECTION.name), opts, providers=providers)
             keys = self._rec.get_modelmeta().custom_metadata_map.get("character", "")
-        except (cv2.error, ValueError, RuntimeError) as exc:
+        except parse_errors as exc:
             raise OcrUnavailable(MODELS_BROKEN) from exc
         if not keys:
             raise OcrUnavailable(MODELS_BROKEN)

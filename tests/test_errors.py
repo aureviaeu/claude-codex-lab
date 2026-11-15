@@ -79,6 +79,19 @@ class ServerErrorTests(ServerBase):
         for word in ("文字辨識模型", "損壞", "啟動檔"):
             self.assertIn(word, data["error"])
 
+    def test_each_damaged_onnxruntime_model_gives_the_same_message(self):
+        """Review finding: the recognizer and direction models load with
+        onnxruntime, whose errors are not RuntimeError."""
+        from travelphotos.places import ocr
+
+        for broken in (place_models.TEXT_RECOGNIZER, place_models.TEXT_DIRECTION):
+            with self.subTest(model=broken.name), tempfile.TemporaryDirectory() as d:
+                _damage(d, place_models.MODELS)
+                with mock.patch("cv2.dnn.readNet", return_value=object()):  # the detector loads fine
+                    with self.assertRaises(OcrUnavailable) as cm:
+                        ocr.OnnxOcr(d)
+                self.assertIn("損壞", str(cm.exception))
+
     def test_damaged_face_model_gives_a_clear_message(self):
         _damage(face_paths.model_dir(self.data), face_paths.MODELS)
         self.start()
