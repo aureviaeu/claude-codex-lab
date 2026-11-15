@@ -71,3 +71,4 @@ input[type=number] { width: 6em; padding: 6px; font: inherit; color: var(--text)
 .face-badge.no_faces, .face-badge.others { color: var(--low); }
 .item.face-out { opacity: .55; }
 button.danger { border-color: var(--low); color: var(--low); }
+.place-thumb { display: block; max-width: 160px; max-height: 120px; margin: 4px 0 8px; border-radius: 4px; }

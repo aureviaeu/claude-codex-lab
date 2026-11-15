@@ -37,8 +37,22 @@
     <details id="chat-box" hidden><summary>LINE 訊息時間參考</summary><table id="chat"></table></details>
     <div id="groups-box" hidden>
       <h3>分組對應行程站點</h3>
-      <p class="note">自動對應會在之後的「景點」功能加入。現在可以手動為每組選擇站點；沒有對應的組會排在最後。</p>
+      <p class="note">按「判斷景點」自動對應，也可以手動為每組選擇站點；沒有對應的組會排在最後。</p>
       <div id="groups"></div>
+    </div>
+    <div id="places-box">
+      <h3>景點</h3>
+      <p class="note">在這台電腦上讀出招牌、站名、門票上的文字，和行程表的地點比對；照片不會上傳。第一次要先下載文字辨識模型（約 75 MB，免費，只需要一次）。</p>
+      <button id="places-analyze" type="button" class="secondary">判斷景點</button>
+      <p id="places-status" class="status" role="status"></p>
+      <div id="places-summary" hidden>
+        <h4>景點總結（依行程順序）</h4>
+        <ol id="places-visits"></ol>
+        <p id="places-unknown"></p>
+        <p id="places-missed" class="note"></p>
+        <details id="places-texts-box" hidden><summary>讀到的文字</summary><ul id="places-texts"></ul></details>
+        <p class="note">輸出時會另外產生 <code>places.md</code>（Markdown 景點總結，附代表照片）。</p>
+      </div>
     </div>
     <p class="note">拖拉照片，或用「往前／往後」按鈕調整順序。</p>
     <button id="reset-order" type="button" class="secondary">還原自動順序</button>

@@ -14,6 +14,7 @@ from unittest import mock
 from PIL import Image
 
 from launcher import bootstrap, download_models
+from travelphotos.places import models as place_models
 from tests.face_helpers import ME, MOM, STRANGER, FakeEngine, no_network, save_photo
 from travelphotos import server as srv
 from travelphotos.faces import engine as face_engine
@@ -142,20 +143,21 @@ class DownloadTests(unittest.TestCase):
             urls.append(url)
             return FakeResponse(self.payload)
 
-        with mock.patch.object(paths, "MODELS", (self.model,)):
+        with mock.patch.object(paths, "MODELS", (self.model,)), mock.patch.object(place_models, "MODELS", ()):
             self.assertTrue(download_models.ensure_models(self.tmp.name, log=lambda *_: None, opener=opener))
             self.assertTrue(download_models.ensure_models(self.tmp.name, log=lambda *_: None, opener=opener))
             self.assertEqual(paths.missing_models(self.tmp.name), [])
         self.assertEqual(urls, ["https://example.invalid/m.onnx"], "second run uses the local file")
 
     def test_wrong_checksum_is_discarded(self):
-        with mock.patch.object(paths, "MODELS", (self.model,)):
+        with mock.patch.object(paths, "MODELS", (self.model,)), mock.patch.object(place_models, "MODELS", ()):
             ok = download_models.ensure_models(self.tmp.name, log=lambda *_: None, opener=lambda u, timeout: FakeResponse(b"evil"))
         self.assertFalse(ok)
         self.assertEqual(os.listdir(self.tmp.name), [])
 
     def test_real_models_are_pinned(self):
-        for m in paths.MODELS:
+        self.assertEqual(len(download_models.all_models()), 4)
+        for m in download_models.all_models():
             self.assertRegex(m.url, r"^https://media\.githubusercontent\.com/media/opencv/opencv_zoo/[0-9a-f]{40}/")
             self.assertRegex(m.sha256, r"^[0-9a-f]{64}$")
 
