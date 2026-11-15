@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 
@@ -12,6 +12,27 @@ class Stop:
     index: int  # 1-based order in the whole trip
     day: int  # 1-based day number
     name: str
+    # Extra Latin spellings used only for matching sign text (#22), written
+    # after the name: 嵐山（別名 Arashiyama）. Never shown as the name.
+    aliases: list[str] = field(default_factory=list)
+
+
+# An alias is written in brackets after the name with an explicit marker,
+# 別名 or aka: 嵐山（別名 Arashiyama）, 雷門 (aka Kaminarimon). Any other
+# bracket (清水寺 (morning), 京都飯店（午餐）) stays part of the name.
+_ALIAS = re.compile(
+    r"^(?P<name>.+?)\s*[（(]\s*(?:別名|aka)\s*[:：]?\s*(?P<alias>[A-Za-z][A-Za-z0-9 .'\-;；,，]*?)\s*[）)]\s*$",
+    re.IGNORECASE,
+)
+
+
+def split_aliases(text: str) -> tuple[str, list[str]]:
+    """'嵐山（別名 Arashiyama）' -> ('嵐山', ['Arashiyama']); other text unchanged."""
+    match = _ALIAS.match(text)
+    if not match:
+        return text, []
+    aliases = [a.strip() for a in re.split(r"[;；,，]", match.group("alias")) if a.strip()]
+    return match.group("name").strip(), aliases
 
 
 _CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
@@ -72,7 +93,8 @@ def parse_itinerary(text: str) -> list[Stop]:
         for part in _SPLIT.split(line):
             name = part.strip(" \t:：,，。")
             if name:
-                stops.append(Stop(index=len(stops) + 1, day=day, name=name))
+                name, aliases = split_aliases(name)
+                stops.append(Stop(index=len(stops) + 1, day=day, name=name, aliases=aliases))
     return stops
 
 

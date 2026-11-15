@@ -1,30 +1,68 @@
-"""The local OCR model files (downloaded once by launcher/download_models.py)."""
+"""The local OCR model files (downloaded once by launcher/download_models.py).
+
+#22: PaddleOCR PP-OCRv3 text detection, text direction and recognition
+(Apache-2.0), as published inside the rapidocr-onnxruntime 1.2.3 wheel
+(Apache-2.0) on PyPI. The wheel is fetched from a pinned URL and checked
+against its SHA-256; only the three model files below are taken out of it,
+each checked against its own SHA-256. See
+docs/decisions/0011-better-sign-reading.md.
+"""
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 from ..faces.paths import ModelFile, model_dir  # noqa: F401  (re-exported)
 
-# OpenCV Zoo, pinned to the same commit as the face models. Both Apache-2.0.
-_ZOO = "https://media.githubusercontent.com/media/opencv/opencv_zoo/48b10fa505aeb51fbd127fc60a5c660040e823b7/models"
-TEXT_DETECTOR = ModelFile(
-    "text_detection_cn_ppocrv3_2023may.onnx",
-    "03f550c6b406fda8bf54bd8327815f6c7e2edd98cea02348c93d879254366587",
-    f"{_ZOO}/text_detection_ppocr/text_detection_cn_ppocrv3_2023may.onnx",
-    2423490,
-)
-TEXT_RECOGNIZER = ModelFile(
-    "text_recognition_CRNN_CN_2021nov.onnx",
-    "c760bf82d684b87dfabb288e6c0f92d41a8cd6c1780661ca2c3cd10c2065a9ba",
-    f"{_ZOO}/text_recognition_crnn/text_recognition_CRNN_CN_2021nov.onnx",
-    72807160,
-)
-MODELS = (TEXT_DETECTOR, TEXT_RECOGNIZER)
 
-# The recognizer's 3944 output characters, one per line, copied from
-# opencv_zoo models/text_recognition_crnn/crnn.py (CHARSET_CN_3944).
-CHARSET = os.path.join(os.path.dirname(__file__), "charset_cn_3944.txt")
+@dataclass(frozen=True)
+class WheelFile:
+    url: str
+    sha256: str
+    size: int
+
+
+@dataclass(frozen=True)
+class WheelModel:
+    name: str  # file name on this computer
+    member: str  # exact path inside the wheel
+    sha256: str
+    size: int
+
+
+WHEEL = WheelFile(
+    "https://files.pythonhosted.org/packages/b7/ef/0df9a58310895ab357f85df67935af6a8fb98f0965c7476cee6fcb966a7e/"
+    "rapidocr_onnxruntime-1.2.3-py3-none-any.whl",
+    "c707d3a6eb72d13119afe9602d3cc36d8b2a4a4d74e9575cf1b0e67ed6a27819",
+    12326259,
+)
+TEXT_DETECTOR = WheelModel(
+    "ch_PP-OCRv3_det_infer.onnx",
+    "rapidocr_onnxruntime/models/ch_PP-OCRv3_det_infer.onnx",
+    "3439588c030faea393a54515f51e983d8e155b19a2e8aba7891934c1cf0de526",
+    2432880,
+)
+TEXT_RECOGNIZER = WheelModel(
+    "ch_PP-OCRv3_rec_infer.onnx",
+    "rapidocr_onnxruntime/models/ch_PP-OCRv3_rec_infer.onnx",
+    "897a3ededb38fee0dae2c1ccee38241f37df202c9509e3abca02e9217c5ee615",
+    10690752,
+)
+TEXT_DIRECTION = WheelModel(
+    "ch_ppocr_mobile_v2.0_cls_infer.onnx",
+    "rapidocr_onnxruntime/models/ch_ppocr_mobile_v2.0_cls_infer.onnx",
+    "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+    585532,
+)
+MODELS = (TEXT_DETECTOR, TEXT_RECOGNIZER, TEXT_DIRECTION)
+
+# The models used before #22 (OpenCV Zoo). No longer downloaded; files left
+# on a computer from an earlier version are not touched and can still be
+# measured with `python -m travelphotos.places.benchmark --engine legacy`.
+LEGACY_DETECTOR = "text_detection_cn_ppocrv3_2023may.onnx"
+LEGACY_RECOGNIZER = "text_recognition_CRNN_CN_2021nov.onnx"
+LEGACY_CHARSET = os.path.join(os.path.dirname(__file__), "charset_cn_3944.txt")
 
 
 def missing_models(directory: str) -> list[str]:
