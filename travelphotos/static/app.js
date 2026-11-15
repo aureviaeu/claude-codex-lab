@@ -12,9 +12,16 @@
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
-    const res = await fetch(path, opts);
-    const data = await res.json().catch(() => ({ error: "伺服器回應無法讀取" }));
-    if (!res.ok) throw new Error(data.error || "發生錯誤");
+    let res;
+    try {
+      res = await fetch(path, opts);
+    } catch (_err) {
+      // The tool is not answering (closed, or busy restarting) (#26).
+      throw new Error("工具沒有回應，請確認啟動檔的視窗還開著，再重新整理頁面。");
+    }
+    const data = await res.json().catch(() => null);
+    if (data === null) throw new Error(res.ok ? "工具回應無法讀取，請重新整理頁面。" : `工具回應無法讀取（${res.status}），請重新整理頁面。`);
+    if (!res.ok) throw new Error(data.error || `發生錯誤（${res.status}）`);
     return data;
   }
 

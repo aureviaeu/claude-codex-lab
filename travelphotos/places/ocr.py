@@ -28,6 +28,11 @@ MODELS_MISSING = (
     "或在專案資料夾執行 .venv/bin/python launcher/download_models.py（Windows 用 .venv\\Scripts\\python）。"
 )
 
+MODELS_BROKEN = (
+    "文字辨識模型檔無法載入，可能已損壞。請關閉這個工具，再用啟動檔（start.command／start.bat／start.sh）重新啟動："
+    "啟動檔會檢查模型檔的校驗碼，損壞的會自動重新下載（需要網路）。"
+)
+
 SCALES = (736, 1280)  # longest side for detection; small and large text
 REC_HEIGHT = 48
 REC_MAX_WIDTH = 1600
@@ -57,13 +62,22 @@ class OnnxOcr:
         if missing_models(directory):
             raise OcrUnavailable(MODELS_MISSING)
         self._cv, self._np = cv2, np
-        self._det = cv2.dnn.readNet(os.path.join(directory, TEXT_DETECTOR.name))
-        opts = ort.SessionOptions()
-        opts.log_severity_level = 3
-        providers = ["CPUExecutionProvider"]
-        self._rec = ort.InferenceSession(os.path.join(directory, TEXT_RECOGNIZER.name), opts, providers=providers)
-        self._cls = ort.InferenceSession(os.path.join(directory, TEXT_DIRECTION.name), opts, providers=providers)
-        keys = self._rec.get_modelmeta().custom_metadata_map.get("character", "")
+        # A model that is present but cannot be parsed (damaged file) gives a
+        # clear message (#26). onnxruntime's load errors subclass RuntimeError;
+        # OSError and MemoryError are not caught and reach the server's
+        # generic handler instead of being called "damaged".
+        try:
+            self._det = cv2.dnn.readNet(os.path.join(directory, TEXT_DETECTOR.name))
+            opts = ort.SessionOptions()
+            opts.log_severity_level = 3
+            providers = ["CPUExecutionProvider"]
+            self._rec = ort.InferenceSession(os.path.join(directory, TEXT_RECOGNIZER.name), opts, providers=providers)
+            self._cls = ort.InferenceSession(os.path.join(directory, TEXT_DIRECTION.name), opts, providers=providers)
+            keys = self._rec.get_modelmeta().custom_metadata_map.get("character", "")
+        except (cv2.error, ValueError, RuntimeError) as exc:
+            raise OcrUnavailable(MODELS_BROKEN) from exc
+        if not keys:
+            raise OcrUnavailable(MODELS_BROKEN)
         # CTC: index 0 is blank, then the model's characters, then a space.
         self._chars = [""] + keys.splitlines() + [" "]
 
