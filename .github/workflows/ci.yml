@@ -14,12 +14,64 @@ permissions:
   contents: read
 
 jobs:
+  # `test` is the required status check (branch protection), so keep this one
+  # job and its name. It installs the browser and the models, then runs every
+  # test; with TRAVELPHOTOS_REQUIRE_ALL_TESTS=1 a test that needs them fails
+  # instead of being skipped. See docs/decisions/0012-full-tests-in-ci.md.
   test:
     name: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Playwright (version pinned in package-lock.json)
+        run: npm ci --no-audit --no-fund
+
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chromium, its system libraries and a CJK font
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei
+
+      # Only public model files, from the pinned URLs in
+      # travelphotos/faces/paths.py and travelphotos/places/models.py. The key
+      # changes when a pin changes. Cached files are not trusted:
+      # download_models.py re-checks every file's SHA-256 and downloads again
+      # (and checks again) any file that does not match.
+      - name: Cache the models
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/travelphotos/models
+          key: models-${{ hashFiles('travelphotos/faces/paths.py', 'travelphotos/places/models.py') }}
+
+      - name: Download and check the models (SHA-256)
+        run: python launcher/download_models.py
+
       - name: Run tests
+        env:
+          TRAVELPHOTOS_REQUIRE_ALL_TESTS: "1"
         run: scripts/test.sh
