@@ -1,0 +1,9 @@
+{
+  "name": "travelphotos-tests",
+  "private": true,
+  "description": "Test-only tools: Playwright drives the page in the browser tests (tests/test_full_flow.py, tests/test_errors.py). The app itself does not use Node. See docs/decisions/0012-full-tests-in-ci.md.",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}
