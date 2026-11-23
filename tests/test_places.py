@@ -202,7 +202,7 @@ class PipelineTests(PlaceFixture):
         res = ordering.order(self.scan.files, [])
         md = summary.markdown(summary.build(res.placements, [], r))
         self.assertIn("沒有提供行程表", md)
-        self.assertIn("未知", md)
+        self.assertIn("不確定", md)  # #32: 未知 is now 不確定
         self.assertIn("「清水寺」", md)
 
     def test_group_with_eight_photos_and_a_video(self):
@@ -349,7 +349,7 @@ class OutputTests(PlaceFixture):
             report = json.load(fh)
         rows = {row["原始檔案"]: row for row in report["files"]}
         self.assertTrue(rows["a1.jpg"]["景點判斷"].startswith("清水寺（可信度：高）"))
-        self.assertTrue(rows["g1.jpg"]["景點判斷"].startswith("未知"))
+        self.assertTrue(rows["g1.jpg"]["景點判斷"].startswith("不確定"))
         self.assertEqual(len(report["places"]["visits"]), 5)
 
     def test_apply_without_places_writes_no_places_md(self):

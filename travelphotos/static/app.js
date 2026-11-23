@@ -183,8 +183,12 @@
       row.append(label, select);
       if (g.place) {
         const info = document.createElement("span");
-        info.className = "note";
-        info.textContent = `可信度：${g.place.confidence}` + (g.place.evidence ? `（${g.place.evidence}）` : "");
+        // 推測：<stop> (guessed from the photos before and after) and 不確定
+        // are shown as such, not as a confidence level (#32).
+        const guessed = g.place.confidence === "推測";
+        const head = guessed || !g.stop ? g.place.headline : `可信度：${g.place.confidence}`;
+        info.className = guessed ? "note place-guess" : "note";
+        info.textContent = head + (g.place.evidence ? `（${g.place.evidence}）` : "");
         row.appendChild(info);
       }
       return row;
@@ -215,10 +219,19 @@
       })
     );
     const u = s.unknown;
-    $("places-unknown").textContent = u.files.length ? `未知：照片 ${u.photos} 張、影片 ${u.videos} 段無法判斷景點。` : "";
+    $("places-unknown").textContent = u.files.length ? `不確定：照片 ${u.photos} 張、影片 ${u.videos} 段無法判斷景點。` : "";
     $("places-missed").textContent = s.missed_stops.length ? "沒有照片的站點：" + s.missed_stops.map((m) => m.name).join("、") : "";
     $("places-texts-box").hidden = s.texts.length === 0;
     $("places-texts").replaceChildren(...s.texts.map((t) => li(`${t.group} 那組（${t.stop}）：${t.lines.join("、")}`)));
+  }
+
+  function guessNote(groups) {
+    const guessed = groups.filter((g) => g.place && g.place.confidence === "推測").length;
+    const unsure = groups.filter((g) => g.place && g.place.confidence === "不確定").length;
+    const parts = [];
+    if (guessed) parts.push(`${guessed} 組依前後照片推測`);
+    if (unsure) parts.push(`${unsure} 組不確定`);
+    return parts.length ? `其中 ${parts.join("、")}，可在「分組對應行程站點」手動修改。` : "";
   }
 
   $("places-analyze").addEventListener("click", async () => {
@@ -232,7 +245,7 @@
       render();
       const s = state.places.summary;
       const warn = s && s.warnings.length ? " " + s.warnings.join(" ") : "";
-      setStatus(status, (s && s.has_itinerary ? `完成：對應到 ${s.visits.length} 個景點。` : "完成：沒有行程表，只列出讀到的文字，景點都是「未知」。") + warn);
+      setStatus(status, (s && s.has_itinerary ? `完成：對應到 ${s.visits.length} 個景點。` + guessNote(state.groups) : "完成：沒有行程表，只列出讀到的文字，景點都是「不確定」。") + warn);
     } catch (err) {
       setStatus(status, err.message, true);
     } finally {
