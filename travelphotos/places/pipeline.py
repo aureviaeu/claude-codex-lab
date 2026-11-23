@@ -10,7 +10,12 @@
    likeness is strong and clearly better than any other place.
 4. Groups are walked in time order; when a name appears more than once in
    the itinerary (a hotel), the next visit in itinerary order is chosen.
-Anything else stays unknown. No network is used anywhere here.
+5. A group still without a stop is "不確定". When the nearest identified
+   groups before and after it (by capture time, or by file name when it has
+   no time) are at the same itinerary stop, it is guessed to be there too
+   and labelled "推測" (#32). Neighbours at different stops, or a missing
+   neighbour, leave it uncertain.
+No network is used anywhere here.
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ class GroupPlace:
     member_ids: list[str]
     stop: Stop | None = None
     confidence: str | None = None  # HIGH / MEDIUM / LOW, None when unknown
-    method: str = ""  # "text", "visual" or ""
+    method: str = ""  # "text", "visual", "inferred" (推測 from neighbours) or ""
     evidence: str = ""
     score: float = 0.0
     texts: list[tuple[str, str]] = field(default_factory=list)  # (file id, line)
@@ -226,6 +231,80 @@ def _resolve_repeats(ordered: list[tuple[GroupPlace, datetime | None]], stops: l
             seen[chosen.index] = t.date()
 
 
+def neighbours(order: list[GroupPlace], anchors: dict[str, Stop]) -> dict[str, tuple[GroupPlace | None, GroupPlace | None]]:
+    """(nearest anchor before, nearest anchor after) for each group in `order`
+    that is not an anchor. `anchors` maps a group key to its stop."""
+    before: list[GroupPlace | None] = []
+    last = None
+    for gp in order:
+        before.append(last)
+        if gp.key in anchors:
+            last = gp
+    out: dict[str, tuple[GroupPlace | None, GroupPlace | None]] = {}
+    nxt = None
+    for i in range(len(order) - 1, -1, -1):
+        gp = order[i]
+        if gp.key in anchors:
+            nxt = gp
+        else:
+            out[gp.key] = (before[i], nxt)
+    return out
+
+
+def _stop_label(stop: Stop) -> str:
+    return f"第 {stop.index} 站「{stop.name}」"
+
+
+def guess_from_neighbours(gp: GroupPlace, before: GroupPlace | None, after: GroupPlace | None, anchors: dict[str, Stop]) -> None:
+    """Give an uncertain group its neighbours' stop when both agree (#32).
+
+    Only the exact same itinerary stop counts: two visits to one hotel are
+    different stops, so a group between them stays uncertain.
+    """
+    reason = gp.evidence or "沒有讀到文字"
+    if before is None or after is None:
+        side = "前後" if before is None and after is None else ("前面" if before is None else "後面")
+        gp.evidence = f"{reason}；{side}沒有已判斷景點的照片，無法推測"
+        return
+    b, a = anchors[before.key], anchors[after.key]
+    if b.index != a.index:
+        gp.evidence = f"{reason}；前一組（{before.key}）在{_stop_label(b)}、後一組（{after.key}）在{_stop_label(a)}，分屬不同行程站，無法推測"
+        return
+    gp.stop = b
+    gp.score = 0.0
+    gp.confidence = LOW
+    gp.method = "inferred"
+    gp.evidence = f"{reason}；前一組（{before.key}）與後一組（{after.key}）都在{_stop_label(b)}，推測為同一站"
+
+
+def infer_in_order(order: list[GroupPlace]) -> None:
+    """Step 5 on one sequence of groups already in shooting order (benchmark)."""
+    anchors = {gp.key: gp.stop for gp in order if gp.stop is not None}
+    found = neighbours(order, anchors)
+    for gp in order:
+        if gp.key in found:
+            guess_from_neighbours(gp, *found[gp.key], anchors)
+
+
+def _infer_from_neighbours(entries: list[tuple[GroupPlace, list[MediaFile], datetime | None]]) -> None:
+    """Step 5: uncertain groups between two groups at the same stop.
+
+    A group with a capture time is compared with the timed groups around it
+    in time order; a group without one with the groups around it in file
+    name order (camera counters), since it has no time to compare. Only
+    stops found before this step (text, look-alike, repeats) are used as
+    neighbours, so a guess never feeds another guess.
+    """
+    anchors = {gp.key: gp.stop for gp, _m, _t in entries if gp.stop is not None}
+    timed = [gp for gp, _m, t in sorted((e for e in entries if e[2] is not None), key=lambda e: (e[2], e[0].key))]
+    by_name = sorted((gp for gp, _m, _t in entries), key=lambda gp: gp.key)
+    found = neighbours(by_name, anchors)
+    found.update(neighbours(timed, anchors))
+    for gp, _m, _t in entries:
+        if gp.key in found:
+            guess_from_neighbours(gp, *found[gp.key], anchors)
+
+
 def analyze(files: list[MediaFile], stops: list[Stop] | None, engine, threshold: int = SIMILARITY_THRESHOLD, environ=None) -> PlaceResult:
     """Judge every group once. `engine.read_text(rgb)` returns text lines."""
     stops = stops or []
@@ -248,6 +327,7 @@ def analyze(files: list[MediaFile], stops: list[Stop] | None, engine, threshold:
         _decide_by_look(unknown, known)
         far = datetime.max
         _resolve_repeats([(gp, t) for gp, _m, t in sorted(entries, key=lambda e: (e[2] or far, e[0].key))], stops)
+        _infer_from_neighbours(entries)
     for gp in result.groups:
         if gp.stop is None and not gp.evidence:
             gp.evidence = "沒有讀到文字" if stops else "沒有行程表"
