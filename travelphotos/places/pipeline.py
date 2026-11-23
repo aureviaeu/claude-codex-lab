@@ -255,11 +255,16 @@ def _stop_label(stop: Stop) -> str:
     return f"第 {stop.index} 站「{stop.name}」"
 
 
-def guess_from_neighbours(gp: GroupPlace, before: GroupPlace | None, after: GroupPlace | None, anchors: dict[str, Stop]) -> None:
+def guess_from_neighbours(
+    gp: GroupPlace, before: GroupPlace | None, after: GroupPlace | None, anchors: dict[str, Stop], same_day: bool = True
+) -> None:
     """Give an uncertain group its neighbours' stop when both agree (#32).
 
     Only the exact same itinerary stop counts: two visits to one hotel are
-    different stops, so a group between them stays uncertain.
+    different stops, so a group between them stays uncertain. same_day=False
+    (the neighbours were photographed on another date than the group) also
+    keeps it uncertain: a stop seen on two days says nothing about the days
+    in between.
     """
     reason = gp.evidence or "沒有讀到文字"
     if before is None or after is None:
@@ -269,6 +274,9 @@ def guess_from_neighbours(gp: GroupPlace, before: GroupPlace | None, after: Grou
     b, a = anchors[before.key], anchors[after.key]
     if b.index != a.index:
         gp.evidence = f"{reason}；前一組（{before.key}）在{_stop_label(b)}、後一組（{after.key}）在{_stop_label(a)}，分屬不同行程站，無法推測"
+        return
+    if not same_day:
+        gp.evidence = f"{reason}；前一組（{before.key}）與後一組（{after.key}）都在{_stop_label(b)}，但拍攝日期不同，無法推測"
         return
     gp.stop = b
     gp.score = 0.0
@@ -290,8 +298,9 @@ def _infer_from_neighbours(entries: list[tuple[GroupPlace, list[MediaFile], date
     """Step 5: uncertain groups between two groups at the same stop.
 
     A group with a capture time is compared with the timed groups around it
-    in time order; a group without one with the groups around it in file
-    name order (camera counters), since it has no time to compare. Only
+    in time order, and only on the same date as both of them; a group
+    without one with the groups around it in file name order (camera
+    counters), since it has no time to compare. Only
     stops found before this step (text, look-alike, repeats) are used as
     neighbours, so a guess never feeds another guess.
     """
@@ -300,9 +309,12 @@ def _infer_from_neighbours(entries: list[tuple[GroupPlace, list[MediaFile], date
     by_name = sorted((gp for gp, _m, _t in entries), key=lambda gp: gp.key)
     found = neighbours(by_name, anchors)
     found.update(neighbours(timed, anchors))
+    day = {gp.key: t.date() for gp, _m, t in entries if t is not None}
     for gp, _m, _t in entries:
         if gp.key in found:
-            guess_from_neighbours(gp, *found[gp.key], anchors)
+            before, after = found[gp.key]
+            same_day = gp.key not in day or all(n is None or day.get(n.key, day[gp.key]) == day[gp.key] for n in (before, after))
+            guess_from_neighbours(gp, before, after, anchors, same_day)
 
 
 def analyze(files: list[MediaFile], stops: list[Stop] | None, engine, threshold: int = SIMILARITY_THRESHOLD, environ=None) -> PlaceResult:

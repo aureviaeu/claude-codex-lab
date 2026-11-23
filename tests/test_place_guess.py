@@ -132,6 +132,20 @@ class GuessTests(TripFixture):
         self.assertEqual(self.at(r, "n1.jpg").stop.index, 3)
         self.assertEqual(self.at(r, "n1.jpg").method, "inferred")
 
+    def test_a_stop_seen_on_two_days_does_not_fill_the_days_between(self):
+        """Review note: no guess across dates, even at the same stop."""
+        r = self.trip(
+            [
+                ("a1.jpg", D1.replace(hour=17), 3),
+                ("n1.jpg", D1.replace(hour=19), None),
+                ("n2.jpg", D2.replace(hour=9), None),
+                ("a2.jpg", D2.replace(hour=11), 3),
+            ]
+        )
+        for fid in ("n1.jpg", "n2.jpg"):
+            self.assertIsNone(self.at(r, fid).stop, fid)
+            self.assertIn("拍攝日期不同", self.at(r, fid).evidence)
+
     def test_first_and_last_photo_have_only_one_neighbour(self):
         r = self.trip(
             [
