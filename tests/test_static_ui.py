@@ -1,6 +1,6 @@
 """Static checks on the page's CSS and JS (#12).
 
-CI has no browser, so these guard the fix for the photo-folder picker showing
+These run without a browser too, so they guard the fix for the photo-folder picker showing
 「在這裡建立資料夾」: an author `display` rule on `.picker-new` beat the
 `hidden` attribute that app.js sets for the photo-folder picker.
 """
