@@ -16,6 +16,7 @@ from PIL import Image
 from launcher import bootstrap, download_models
 from travelphotos.places import models as place_models
 from tests.face_helpers import ME, MOM, STRANGER, FakeEngine, no_network, save_photo
+from tests.optional import needs, skip_or_fail
 from travelphotos import server as srv
 from travelphotos.faces import engine as face_engine
 from travelphotos.faces import paths
@@ -114,7 +115,7 @@ class AvailabilityTests(unittest.TestCase):
             state = srv.AppState("", data_dir=tmp)
             data = state.faces.to_json()
             if data["message"] == face_engine.LIBS_MISSING:
-                self.skipTest("opencv not installed")
+                skip_or_fail(self, "opencv not installed")
             self.assertFalse(data["available"])
             self.assertIn("download_models.py", data["message"])
             with self.assertRaises(face_engine.FaceUnavailable):
@@ -187,9 +188,9 @@ def _real_model_dir():
     return None
 
 
-@unittest.skipUnless(_real_model_dir(), "face models not downloaded (python launcher/download_models.py)")
+@needs(_real_model_dir(), "face models not downloaded (python launcher/download_models.py)")
 class RealEngineTests(unittest.TestCase):
-    """Runs where the real models are present (not in CI, which stays offline)."""
+    """Runs where the real models are present (CI downloads them first)."""
 
     def test_real_engine_runs_offline(self):
         with no_network():

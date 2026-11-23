@@ -2,8 +2,9 @@
 
 The trip folder looks like files saved from LINE: no EXIF time, no GPS,
 modification times in the wrong order; the order comes from the file names.
-Faces and sign text are read by the fake engines from the #6 and #7 tests
-(CI has no models). Everything goes through the same HTTP API the page uses.
+Faces and sign text are read by the fake engines from the #6 and #7 tests, so
+the expected results do not depend on model accuracy; RealModelsOfflineTests
+loads the real models. Everything goes through the same HTTP API the page uses.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from unittest import mock
 
 from tests.face_helpers import ME, MOM, STRANGER, FakeEngine, picture, save_photo, save_video
 from tests.helpers import snapshot
+from tests.optional import needs
 from tests.test_places import MARKERS, FakeOcr
 from travelphotos import server as srv
 from travelphotos.places import cloud
@@ -339,7 +341,7 @@ def _models_ready():
     return not face_paths.missing_models(d) and not place_models.missing_models(d)
 
 
-@unittest.skipUnless(_models_ready(), "models not downloaded (python launcher/download_models.py)")
+@needs(_models_ready(), "models not downloaded (python launcher/download_models.py)")
 class RealModelsOfflineTests(unittest.TestCase):
     def test_real_models_load_and_run_without_network(self):
         import numpy as np
@@ -426,7 +428,7 @@ def _browser_available() -> bool:
     return _playwright_entry() is not None
 
 
-@unittest.skipUnless(_browser_available(), "no browser automation (node + playwright) on this computer; check by hand")
+@needs(_browser_available(), "no browser automation (node + playwright) on this computer; check by hand")
 class BrowserFlowTests(FlowBase):
     """Clicks through the real page in a headless browser."""
 

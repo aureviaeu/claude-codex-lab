@@ -9,7 +9,7 @@
 1. 你開 Issue，用日常語言寫想法（表單會自動標上 `proposed`）。
 2. Claude 把想法整理成規格與驗收條件。太大就拆成子 Issue，並請你加上 `ready`。這一步還不寫程式。
 3. 你加上 `ready` 之後，若沒有尚未驗收的 PR，Claude 只做最舊的一個：拿掉 `ready`、標成 `in-progress`，在 `claude/issue-<編號>-<簡稱>` 上實作，開一張 PR。語言和框架由 Claude 決定，寫在 `docs/decisions/`。
-4. CI 跑 `scripts/test.sh`，Codex 只提出嚴重問題（P0／P1）。
+4. CI 跑 `scripts/test.sh`，Codex 只提出嚴重問題（P0／P1）。CI 會先裝好瀏覽器（Playwright）並下載模型（比對 SHA-256），所以畫面操作測試和真實模型測試都會真的執行；少了其中任何一樣，`test` 會失敗，不會悄悄略過。
 5. 有問題的話，Claude 修正並在該討論回覆 `[claude-fixed]`（Action 會把討論標成已解決）或 `[claude-declined]`（討論留著等你決定），再貼一次 `@codex review`。
 6. Codex 已經審查最新的 commit、CI 綠燈、每則意見都有回覆之後，Claude 標上 `acceptance` 然後停下。超過 24 小時 Codex 仍沒審該 commit 時也會停下，並註明要你自己看那個 diff。你照驗收步驟看過，把還開著的討論解決，再合併。
 
@@ -101,4 +101,17 @@ flowchart TD
 
 想知道招牌辨識準不準：把自己的照片放在一個資料夾，另外寫一個 `labels.csv`（兩欄：檔案、應對到的站名，不應對到就留空）和行程表文字檔，在專案資料夾執行 `.venv/bin/python -m travelphotos.places.benchmark --photos 照片資料夾 --labels labels.csv --itinerary 行程表.txt`（Windows 用 `.venv\Scripts\python`），會列出每張讀到的文字、對到的站與命中率，全程不用網路。不加參數則用 repo 內的測試照片（`tests/data/signs`）。
 
-技術選擇見 `docs/decisions/0002` 到 `0011`。
+### 在自己的電腦跑完整測試
+
+`scripts/test.sh` 在沒有瀏覽器或模型的電腦上會略過需要它們的測試。要全部都跑（和 CI 一樣）：
+
+```sh
+npm ci                                    # 測試用的 Playwright（版本鎖在 package-lock.json）
+npx playwright install --with-deps chromium
+python launcher/download_models.py        # 下載模型並比對 SHA-256
+TRAVELPHOTOS_REQUIRE_ALL_TESTS=1 scripts/test.sh
+```
+
+加上 `TRAVELPHOTOS_REQUIRE_ALL_TESTS=1` 時，缺瀏覽器或模型會讓測試失敗而不是略過。App 本身不需要 Node。
+
+技術選擇見 `docs/decisions/0002` 到 `0012`。

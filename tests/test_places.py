@@ -17,6 +17,7 @@ from PIL import Image
 
 from tests.face_helpers import no_network
 from tests.helpers import save_jpeg, scene, variant
+from tests.optional import needs
 from travelphotos import ordering, output
 from travelphotos import server as srv
 from travelphotos.itinerary import parse_itinerary
@@ -545,7 +546,7 @@ def _cjk_font():
     return None
 
 
-@unittest.skipUnless(_real_model_dir() and _cjk_font(), "OCR models not downloaded (python launcher/download_models.py) or no CJK font")
+@needs(_real_model_dir() and _cjk_font(), "OCR models not downloaded (python launcher/download_models.py) or no CJK font")
 class RealOcrTests(unittest.TestCase):
     """Reads a rendered sign with the real local models."""
 

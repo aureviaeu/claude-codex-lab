@@ -17,6 +17,7 @@ from unittest import mock
 
 from launcher import download_models
 from tests.face_helpers import ME, FakeEngine, save_photo
+from tests.optional import needs
 from tests.test_full_flow import _REPO, _browser_available, _playwright_entry
 from tests.test_places import FakeOcr
 from travelphotos import server as srv
@@ -223,7 +224,7 @@ _PAGE_SCRIPT = textwrap.dedent(
 )
 
 
-@unittest.skipUnless(_browser_available(), "no browser automation (node + playwright) on this computer")
+@needs(_browser_available(), "no browser automation (node + playwright) on this computer")
 class PageMessageBrowserTests(ServerBase):
     def test_page_shows_server_and_connection_errors_in_chinese(self):
         self.start(face_engine_factory=FakeEngine, place_engine_factory=lambda: FakeOcr({}))

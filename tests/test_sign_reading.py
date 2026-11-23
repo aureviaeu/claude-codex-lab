@@ -17,6 +17,7 @@ import numpy as np
 from launcher import download_models
 from tests.face_helpers import no_network
 from tests.helpers import snapshot
+from tests.optional import needs
 from travelphotos.itinerary import Stop, parse_itinerary, split_aliases
 from travelphotos.places import benchmark, matching
 from travelphotos.places import models as place_models
@@ -268,7 +269,7 @@ def _models_ready():
     return not place_models.missing_models(place_models.model_dir())
 
 
-@unittest.skipUnless(_models_ready(), "OCR models not downloaded (python launcher/download_models.py)")
+@needs(_models_ready(), "OCR models not downloaded (python launcher/download_models.py)")
 class RealSignTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
