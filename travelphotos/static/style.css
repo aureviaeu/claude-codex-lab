@@ -11,6 +11,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 syst
 header, main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 h1 { margin: 20px 0 4px; font-size: 24px; }
 .note { color: var(--muted); margin: 4px 0 12px; }
+/* A stop guessed from the photos before and after (#32), set apart from stops read on signs. */
+.note.place-guess { color: var(--medium); font-weight: 600; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; }
 label { display: block; margin: 10px 0; }
 label.file { font-size: 14px; }

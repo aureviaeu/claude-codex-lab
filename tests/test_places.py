@@ -17,6 +17,7 @@ from PIL import Image
 
 from tests.face_helpers import no_network
 from tests.helpers import save_jpeg, scene, variant
+from tests.optional import needs
 from travelphotos import ordering, output
 from travelphotos import server as srv
 from travelphotos.itinerary import parse_itinerary
@@ -201,7 +202,7 @@ class PipelineTests(PlaceFixture):
         res = ordering.order(self.scan.files, [])
         md = summary.markdown(summary.build(res.placements, [], r))
         self.assertIn("沒有提供行程表", md)
-        self.assertIn("未知", md)
+        self.assertIn("不確定", md)  # #32: 未知 is now 不確定
         self.assertIn("「清水寺」", md)
 
     def test_group_with_eight_photos_and_a_video(self):
@@ -348,7 +349,7 @@ class OutputTests(PlaceFixture):
             report = json.load(fh)
         rows = {row["原始檔案"]: row for row in report["files"]}
         self.assertTrue(rows["a1.jpg"]["景點判斷"].startswith("清水寺（可信度：高）"))
-        self.assertTrue(rows["g1.jpg"]["景點判斷"].startswith("未知"))
+        self.assertTrue(rows["g1.jpg"]["景點判斷"].startswith("不確定"))
         self.assertEqual(len(report["places"]["visits"]), 5)
 
     def test_apply_without_places_writes_no_places_md(self):
@@ -545,7 +546,7 @@ def _cjk_font():
     return None
 
 
-@unittest.skipUnless(_real_model_dir() and _cjk_font(), "OCR models not downloaded (python launcher/download_models.py) or no CJK font")
+@needs(_real_model_dir() and _cjk_font(), "OCR models not downloaded (python launcher/download_models.py) or no CJK font")
 class RealOcrTests(unittest.TestCase):
     """Reads a rendered sign with the real local models."""
 

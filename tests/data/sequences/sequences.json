@@ -1,0 +1,51 @@
+[
+ {
+  "name": "建築照片（沒有文字）夾在兩張清水寺招牌之間 → 推測：清水寺",
+  "photos": [
+   {"file": "../signs/sign16.jpg", "expected": "清水寺"},
+   {"file": "../signs/sign23.jpg", "expected": "清水寺"},
+   {"file": "../signs/sign22.jpg", "expected": "清水寺"}
+  ]
+ },
+ {
+  "name": "文字不是地名（商店招牌、禁止標示）夾在京都車站站名標之間 → 推測：京都車站",
+  "photos": [
+   {"file": "../signs/sign25.jpg", "expected": "京都車站"},
+   {"file": "store01.jpg", "expected": "京都車站"},
+   {"file": "../signs/sign13.jpg", "expected": "京都車站"},
+   {"file": "../signs/sign26.jpg", "expected": "京都車站"}
+  ]
+ },
+ {
+  "name": "寫了多個地名的路口指標與鳥居題字夾在伏見稻荷之間 → 推測：伏見稻荷大社",
+  "photos": [
+   {"file": "../signs/sign01.jpg", "expected": "伏見稻荷大社"},
+   {"file": "multi01.jpg", "expected": "伏見稻荷大社"},
+   {"file": "../signs/sign06.jpg", "expected": "伏見稻荷大社"},
+   {"file": "../signs/sign02.jpg", "expected": "伏見稻荷大社"}
+  ]
+ },
+ {
+  "name": "前後分屬不同景點：金閣寺建築夾在京都車站與清水寺之間 → 保持不確定",
+  "photos": [
+   {"file": "../signs/sign26.jpg", "expected": "京都車站"},
+   {"file": "../signs/held11.jpg", "expected": null},
+   {"file": "../signs/sign16.jpg", "expected": "清水寺"}
+  ]
+ },
+ {
+  "name": "前後分屬不同景點：多地名指標夾在伏見稻荷與清水寺之間 → 保持不確定",
+  "photos": [
+   {"file": "../signs/sign03.jpg", "expected": "伏見稻荷大社"},
+   {"file": "multi01.jpg", "expected": null},
+   {"file": "../signs/sign22.jpg", "expected": "清水寺"}
+  ]
+ },
+ {
+  "name": "旅程第一張沒有前一張可參考 → 保持不確定",
+  "photos": [
+   {"file": "../signs/sign70.jpg", "expected": null},
+   {"file": "../signs/sign16.jpg", "expected": "清水寺"}
+  ]
+ }
+]

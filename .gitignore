@@ -1,3 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
+node_modules/
+
+# The owner's own photos for the place benchmark (#32): never commit them.
+/benchmark-local/

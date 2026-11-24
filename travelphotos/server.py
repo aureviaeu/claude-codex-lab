@@ -182,7 +182,9 @@ class AppState:
                     "size": len(g.members),
                     "first": g.members[0].id,
                     "stop": g.stop.index if g.stop else None,
-                    "place": {"confidence": label, "evidence": evidence} if (self.places is not None or g.stop) else None,
+                    "place": {"confidence": label, "evidence": evidence, "headline": place_summary.headline(g.stop, label)}
+                    if (self.places is not None or g.stop)
+                    else None,
                 }
             )
         files = []

@@ -6,7 +6,10 @@ from ..itinerary import Stop
 from ..ordering import CONFIDENCE_LABEL, Placement
 from .pipeline import PlaceResult
 
-UNKNOWN = "未知"
+# No stop: no readable place name, or text that fits no single stop and no
+# guess from neighbouring photos (#32).
+UNKNOWN = "不確定"
+INFERRED = "推測"  # a stop guessed from the photos before and after (#32)
 MANUAL = "手動指定"
 
 
@@ -14,10 +17,23 @@ def group_label(stop: Stop | None, places: PlaceResult | None, file_id: str) -> 
     """(confidence label, evidence) for the stop a file ended up at."""
     gp = places.by_file().get(file_id) if places else None
     if stop is None:
+        if gp is not None and gp.stop is not None:
+            return MANUAL, "在頁面上手動設為未對應"
         return UNKNOWN, (gp.evidence if gp else "")
     if gp is not None and gp.stop is not None and gp.stop.index == stop.index:
+        if gp.method == "inferred":
+            return INFERRED, gp.evidence
         return CONFIDENCE_LABEL[gp.confidence], gp.evidence
     return MANUAL, "在頁面上手動選擇站點"
+
+
+def headline(stop: Stop | None, label: str) -> str:
+    """不確定, 推測：<stop>, or <stop>（可信度：<label>）."""
+    if stop is None:
+        return MANUAL + "：未對應" if label == MANUAL else UNKNOWN
+    if label == INFERRED:
+        return f"{INFERRED}：{stop.name}"
+    return f"{stop.name}（可信度：{label}）"
 
 
 def place_note(stop: Stop | None, places: PlaceResult | None, file_id: str) -> str:
@@ -25,7 +41,7 @@ def place_note(stop: Stop | None, places: PlaceResult | None, file_id: str) -> s
     if places is None and stop is None:
         return ""
     label, evidence = group_label(stop, places, file_id)
-    head = UNKNOWN if stop is None else f"{stop.name}（可信度：{label}）"
+    head = headline(stop, label)
     return f"{head}：{evidence}" if evidence else head
 
 
@@ -78,7 +94,10 @@ def build(placements: list[Placement], stops: list[Stop], places: PlaceResult | 
     texts = []
     for gp in places.groups if places else []:
         if gp.texts:
-            texts.append({"group": gp.key, "stop": gp.stop.name if gp.stop else UNKNOWN, "lines": [t for _f, t in gp.texts]})
+            stop = gp.stop.name if gp.stop else UNKNOWN
+            if gp.stop is not None and gp.method == "inferred":
+                stop = f"{INFERRED}：{gp.stop.name}"
+            texts.append({"group": gp.key, "stop": stop, "lines": [t for _f, t in gp.texts]})
     return {
         "analyzed": places is not None,
         "has_itinerary": bool(stops),
@@ -120,7 +139,7 @@ def markdown(summary: dict, names: dict[str, str] | None = None) -> str:
     for w in summary["warnings"]:
         out += [f"> {w}", ""]
     if not summary["has_itinerary"]:
-        out += ["沒有提供行程表，所以無法判斷景點，所有照片都列為「未知」；下方列出讀到的文字。", ""]
+        out += ["沒有提供行程表，所以無法判斷景點，所有照片都列為「不確定」；下方列出讀到的文字。", ""]
     if summary["visits"]:
         out += ["| 順序 | 景點 | 行程 | 照片 | 影片 | 可信度 | 代表照片 |", "| --- | --- | --- | --- | --- | --- | --- |"]
         for v in summary["visits"]:
@@ -141,7 +160,8 @@ def markdown(summary: dict, names: dict[str, str] | None = None) -> str:
             out += [f"![{v['name']} 代表照片]({_link(rep)})", ""]
     unk = summary["unknown"]
     if unk["files"]:
-        out += [f"## {UNKNOWN}", "", f"無法判斷景點：照片 {unk['photos']} 張，影片 {unk['videos']} 段。", ""]
+        why = "沒有可讀的地名，前後照片也無法推測" if summary["has_itinerary"] else "沒有行程表，無法判斷景點"
+        out += [f"## {UNKNOWN}", "", f"{why}：照片 {unk['photos']} 張，影片 {unk['videos']} 段。", ""]
         out += [f"- {_md(names.get(fid, fid))}" for fid in unk["files"]]
         out.append("")
     if summary["missed_stops"]:
